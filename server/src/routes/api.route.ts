@@ -1,13 +1,12 @@
 import {Router} from "express"
-import {trafficController,} from "../controllers/handle.controller"
-import {requestHistory} from "../app"
+import { requestHistory } from "../app"
+
 const router = Router()
 
-router.all('/hook/:subdomain/*path', trafficController)
-router.all('/hook/:subdomain', trafficController)
 router.get("/history/:subdomain", (req, res) => {
     const { subdomain } = req.params;
     const history = requestHistory.get(subdomain) || [];
     res.json(history);
 });
+
 export default router

@@ -11,6 +11,7 @@ interface ForwardedRequest {
     headers: any;
     body: any;
     query: any;
+    timestamp: number;
 }
 
 interface LocalResponse {

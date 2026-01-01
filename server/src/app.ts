@@ -20,6 +20,7 @@ const io = new Server(server,{
 })
 
 export const tunnels = new Map<string, string>()
+export const requestHistory = new Map<string, any[]>()
 
 io.on('connection',(socket)=>{
     console.log(`🔌 New Connection ${socket.id}`)
@@ -47,9 +48,10 @@ io.on('connection',(socket)=>{
 
 
 import handleRouter from "./routes/handle.routes"
-
+import apiRouter from "./routes/api.route"
 app.use(handleRouter)
 
+app.use("/api",apiRouter)
 export {
     server,
     io

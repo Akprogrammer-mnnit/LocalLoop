@@ -1,5 +1,5 @@
 import { Request,Response } from "express"
-import {tunnels,io} from "../app"
+import {tunnels,io,requestHistory} from "../app"
 import crypto from "crypto"
 interface ForwardRequest {
     id: string,
@@ -7,7 +7,8 @@ interface ForwardRequest {
     path:string,
     headers: any,
     body: any,
-    query: any
+    query: any,
+    timestamp: number
 }
 
 
@@ -39,9 +40,18 @@ export const trafficController = (req: Request , res: Response) => {
         path: finalPath,
         headers: req.headers,
         body: req.body,
-        query: req.query
+        query: req.query,
+        timestamp: Date.now()
     }
 
+    if (!requestHistory.has(subdomain)) {
+        requestHistory.set(subdomain, []);
+    }
+    const history = requestHistory.get(subdomain)!;
+    history.unshift(payload);
+    if (history.length > 50) history.pop();
+
+    io.to(`dashboard-${subdomain}`).emit("new-request", payload);
     console.log(`📨 Forwarding ${req.method} to ${subdomain}/${finalPath}...`);
 
     io.to(targetSocketId)
