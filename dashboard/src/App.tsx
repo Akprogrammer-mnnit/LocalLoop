@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 import axios from 'axios';
 import { Play, Clock, ArrowRight, Activity } from 'lucide-react';
 
-const SERVER_URL = 'http://localhost:3000';
+const SERVER_URL = import.meta.env.VITE_SERVER_URL
 const SUBDOMAIN = 'demo'; 
 
 interface RequestLog {

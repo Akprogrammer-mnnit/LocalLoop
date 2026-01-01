@@ -2,8 +2,8 @@ import {Command} from "commander"
 import {io,Socket} from "socket.io-client"
 import axios from "axios"
 import chalk from "chalk"
-
-
+import dotenv from "dotenv"
+dotenv.config()
 interface ForwardedRequest {
     id: string;
     method: string;
@@ -25,9 +25,9 @@ const program = new Command()
 
 program
    .version('1.0.0')
-  .requiredOption('-p, --port <number>', 'Local port to forward to (e.g., 3000)')
+  .requiredOption('-p, --port <number>', 'Local port to forward', process.env.DEFAULT_PORT)
   .option('-s, --subdomain <string>', 'Desired subdomain', 'random-dev') 
-  .option('-h, --host <string>', 'Proxy Server URL', 'http://localhost:3000') // Change this when you deploy to Render
+  .option('-h, --host <string>', 'Proxy Server URL', process.env.PROXY_HOST)
   .parse(process.argv);
 
 
