@@ -46,12 +46,19 @@ export const trafficController = (req: Request , res: Response) => {
 
     io.to(targetSocketId)
         .timeout(5000)
-        .emit("incoming-request", payload, (err: any, response: LocalResposne) => {
+        .emit("incoming-request", payload, (err: any, responses: LocalResposne) => {
             if (err) {
                 console.error(`⚠️ Timeout/Error forwarding to ${subdomain}`);
                 return res.status(504).json({ error: "Local CLI failed to respond in time." });
             }
 
+            const response = Array.isArray(responses) ? responses[0] : responses;
+           console.log("🔍 CLI Response (Unwrapped):", response);
+
+            if (!response || !response.status) {
+                console.error("❌ Invalid response structure received from CLI");
+                return res.status(502).json({ error: "Invalid response from CLI" });
+            }
             res.status(response.status).set(response.headers).send(response.data);
         })
 }
