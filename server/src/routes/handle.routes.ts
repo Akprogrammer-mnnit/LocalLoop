@@ -5,9 +5,5 @@ const router = Router()
 
 router.all('/hook/:subdomain/*path', trafficController)
 router.all('/hook/:subdomain', trafficController)
-router.get("/history/:subdomain", (req, res) => {
-    const { subdomain } = req.params;
-    const history = requestHistory.get(subdomain) || [];
-    res.json(history);
-});
+
 export default router
