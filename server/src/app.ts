@@ -34,8 +34,8 @@ io.on('connection',(socket)=>{
 
         tunnels.set(subdomain,socket.id);
         socket.data.subdomain = subdomain
-        console.log(`✅ Registered: https://localloop.com/hook/${subdomain} -> Socket ${socket.id}`);
-        socket.emit("registered", { url: `http://localhost:3000/hook/${subdomain}` });
+        console.log(`✅ Registered: https://localloop-server.onrender.com/hook/${subdomain} -> Socket ${socket.id}`);
+        socket.emit("registered", { url: `https://localloop-server.onrender.com/hook/${subdomain}` });
     })
 
     socket.on("disconnect",()=>{

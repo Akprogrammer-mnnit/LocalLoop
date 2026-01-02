@@ -1,9 +1,11 @@
+#!/usr/bin/env node
 import {Command} from "commander"
 import {io,Socket} from "socket.io-client"
 import axios from "axios"
 import chalk from "chalk"
-import dotenv from "dotenv"
-dotenv.config()
+
+
+const PRODUCTION_SERVER = 'https://localloop-server.onrender.com';
 interface ForwardedRequest {
     id: string;
     method: string;
@@ -24,10 +26,10 @@ interface LocalResponse {
 const program = new Command()
 
 program
-   .version('1.0.0')
-  .requiredOption('-p, --port <number>', 'Local port to forward', process.env.DEFAULT_PORT)
+   .version('1.0.1')
+  .requiredOption('-p, --port <number>', 'Local port to forward', '3000')
   .option('-s, --subdomain <string>', 'Desired subdomain', 'random-dev') 
-  .option('-h, --host <string>', 'Proxy Server URL', process.env.PROXY_HOST)
+  .option('-h, --host <string>', 'Proxy Server URL', process.env.PROXY_HOST || PRODUCTION_SERVER)
   .parse(process.argv);
 
 
