@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv"
 dotenv.config()
-const DB_NAME = "local"
+const DB_NAME = "LOOPLOCAL"
 
 const connectDB = async() => {
     try {

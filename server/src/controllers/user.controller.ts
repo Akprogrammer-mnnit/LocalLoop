@@ -10,23 +10,26 @@ const generateTokens = (user: IUserDocument) => {
 
 export const registerUser = async (req: Request, res: Response) => {
   try {
+    
     const { email, password } = req.body;
 
     if (!email || !password || password.length < 8) {
       return res.status(400).json({ error: "Invalid credentials" });
     }
+   
 
     const normalizedEmail = email.toLowerCase();
     const existingUser = await User.findOne({ email: normalizedEmail });
-
-    if (existingUser) {
+  
+    if (existingUser) { 
       return res.status(409).json({ error: "User already exists" });
     }
-
+    
     const user = await User.create({
       email: normalizedEmail,
       password,
     });
+  
 
     return res.status(201).json({
       data: {
@@ -36,7 +39,8 @@ export const registerUser = async (req: Request, res: Response) => {
       },
       message: "User created successfully",
     });
-  } catch {
+  } catch(error) {
+    console.log("Error in registering user: ",error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -94,3 +98,5 @@ export const loginUser = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Login failed" });
   }
 };
+
+

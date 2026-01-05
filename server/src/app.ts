@@ -51,9 +51,12 @@ io.on('connection',(socket)=>{
 
 import handleRouter from "./routes/handle.routes"
 import apiRouter from "./routes/api.route"
+import userRouter from "./routes/user.route"
 app.use(handleRouter)
 
 app.use("/api",apiRouter)
+
+app.use("/api",userRouter)
 export {
     server,
     io
