@@ -1,23 +1,19 @@
-import jwt, { JwtPayload } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import mongoose from "mongoose";
 import { User } from "../models/user.model";
+import { AuthRequest } from "../types/auth.request";
 
 dotenv.config();
 
-const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET!;
 if (!ACCESS_TOKEN_SECRET) {
-  throw new Error("ACCESS_TOKEN_SECRET is missing");
-}
-
-interface AccessTokenPayload extends JwtPayload {
-  _id: mongoose.Types.ObjectId;
-  email: string;
+  throw new Error("ACCESS_TOKEN_SECRET missing");
 }
 
 export const verifyJWT = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
@@ -27,10 +23,10 @@ export const verifyJWT = async (
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const decoded = jwt.verify(
-      token,
-      ACCESS_TOKEN_SECRET
-    ) as AccessTokenPayload;
+    const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET) as {
+      _id: mongoose.Types.ObjectId;
+      email: string;
+    };
 
     const user = await User.findById(decoded._id).select("-password");
     if (!user) {
