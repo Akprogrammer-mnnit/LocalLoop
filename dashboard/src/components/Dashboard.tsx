@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import axios from 'axios';
 import { Play, Clock, ArrowRight, Activity } from 'lucide-react';
+import { useParams } from 'react-router-dom';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL;
-const SUBDOMAIN = 'demo'; 
 
 interface RequestLog {
   id: string;
@@ -18,7 +18,10 @@ interface RequestLog {
 function Dashboard() {
   const [requests, setRequests] = useState<RequestLog[]>([]);
   const [selectedReq, setSelectedReq] = useState<RequestLog | null>(null);
-
+  
+  let {id,SUBDOMAIN} = useParams();
+  SUBDOMAIN = `${id}/${SUBDOMAIN}`;
+  console.log(SUBDOMAIN);
   useEffect(() => {
     axios.get(`${SERVER_URL}/api/history/${SUBDOMAIN}`).then(res => {
       setRequests(res.data);
@@ -27,12 +30,13 @@ function Dashboard() {
     const socket = io(SERVER_URL);
     
     socket.on('connect', () => {
-     
+      console.log("Connected to server")
     });
 
     socket.on('new-request', (newReq: RequestLog) => {
       setRequests(prev => [newReq, ...prev]);
     });
+    socket.emit('join-room',SUBDOMAIN);
 
     return () => { socket.disconnect(); };
   }, []);

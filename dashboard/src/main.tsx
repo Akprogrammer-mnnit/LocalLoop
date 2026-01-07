@@ -13,7 +13,7 @@ const  router = createBrowserRouter([
     element: <App />,
     children: [
       {
-        path: "/",
+        path: "/:id/:SUBDOMAIN",
         element: <Dashboard />
       },
       {
