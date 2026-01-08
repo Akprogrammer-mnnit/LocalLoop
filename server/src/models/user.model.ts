@@ -14,6 +14,7 @@ export interface IUserDocument extends Document {
   email: string;
   password: string;
   refreshToken?: string;
+  apiKey: string;
   createdAt: Date;
   updatedAt: Date;
   isPasswordCorrect(password: string): Promise<boolean>;
@@ -39,6 +40,11 @@ const userSchema = new mongoose.Schema<IUserDocument>(
       type: String,
       select: false,
     },
+    apiKey: {
+      type: String,
+      select: false,
+      required:true
+    }
   },
   { timestamps: true }
 );

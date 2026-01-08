@@ -6,6 +6,7 @@ import App from './App.tsx'
 import SignUp from './components/SignUp.tsx'
 import Login from './components/Login.tsx'
 import Dashboard from './components/Dashboard.tsx'
+import Home from './components/Home.tsx';
 
 const  router = createBrowserRouter([
   {
@@ -13,7 +14,11 @@ const  router = createBrowserRouter([
     element: <App />,
     children: [
       {
-        path: "/:id/:SUBDOMAIN",
+        path: "/",
+        element: <Home />
+      },
+      {
+        path: "/dashboard/:SUBDOMAIN",
         element: <Dashboard />
       },
       {

@@ -1,31 +1,28 @@
 import React, { useState } from 'react'
 import axios from 'axios'
+import { useNavigate } from 'react-router-dom';
 function SignUp() {
     const [email, setEmail] = useState < string > ("")
     const [password, setPassword] = useState < string > ("")
     const [error,setError] = useState<string>("");
+    const navigate = useNavigate();
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const response: {
-            error?: string;
-            message?: string;
-            data?: string;
-        } = await axios.post(`${import.meta.env.VITE_SERVER_URL}/api/register`,{email,password});
+    e.preventDefault();
 
-        if (!response){
-            setError("Something went wrong");
-            return;
-        }
+    try {
+      await axios.post(
+        `${import.meta.env.VITE_SERVER_URL}/api/register`,
+        { email, password },
+        { withCredentials: true } 
+      );
 
-        if (response.error){
-            setError(response.error);
-            return;
-        }
-
-        if (response.data){
-            console.log(response.data);
-        }
+      navigate("/");
+    } catch (err: any) {
+      setError(
+        err.response?.data?.error || "Login failed"
+      );
     }
+  };
     return (
         <div>
             <form onSubmit={handleSubmit}>

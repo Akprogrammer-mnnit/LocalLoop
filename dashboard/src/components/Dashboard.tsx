@@ -19,8 +19,7 @@ function Dashboard() {
   const [requests, setRequests] = useState<RequestLog[]>([]);
   const [selectedReq, setSelectedReq] = useState<RequestLog | null>(null);
   
-  let {id,SUBDOMAIN} = useParams();
-  SUBDOMAIN = `${id}/${SUBDOMAIN}`;
+  const {SUBDOMAIN} = useParams();
   console.log(SUBDOMAIN);
   useEffect(() => {
     axios.get(`${SERVER_URL}/api/history/${SUBDOMAIN}`).then(res => {
