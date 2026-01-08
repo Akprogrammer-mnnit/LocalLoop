@@ -4,12 +4,14 @@ import dotenv from "dotenv"
 import http from "http"
 import {Server} from "socket.io"
 import cookieParser from "cookie-parser"
-import crypto from "crypto"
 dotenv.config()
 
 
 const app = express()
-app.use(cors())
+app.use(cors({
+    origin: process.env.ORIGIN,
+    credentials: true
+}))
 app.use(express.json())
 app.use(cookieParser())
 const server = http.createServer(app)
@@ -28,17 +30,15 @@ export const requestHistory = new Map<string, any[]>()
 io.on('connection',(socket)=>{
     console.log(`🔌 New Connection ${socket.id}`)
     socket.on('register',(subdomain:string)=>{
-        const token = crypto.randomBytes(32).toString("hex") 
-        if (tunnels.has(`${token}/${subdomain}`)){
+        if (tunnels.has(`${subdomain}`)){
             socket.emit("error","Subdomain already in use");
             return;
         }
 
-        tunnels.set(`${token}/${subdomain}`,socket.id);
+        tunnels.set(`${subdomain}`,socket.id);
         socket.data.subdomain = subdomain
-        socket.data.token = token;
-        console.log(`✅ Registered: https://localloop-server.onrender.com/hook/${token}/${subdomain} -> Socket ${socket.id}`);
-        socket.emit("registered", { url: `https://localloop-server.onrender.com/hook/${token}/${subdomain}` });
+        console.log(`✅ Registered: https://localloop-server.onrender.com/hook/${subdomain} -> Socket ${socket.id}`);
+        socket.emit("registered", { url: `https://localloop-server.onrender.com/hook/${subdomain}` });
     })
 
     socket.on('join-room',(data)=>{
@@ -46,11 +46,12 @@ io.on('connection',(socket)=>{
     })
     socket.on("disconnect",()=>{
         const subdomain =  socket.data.subdomain;
-        const token = socket.data.token;
+       
+       
     
-        if (subdomain && tunnels.get(`${token}/${subdomain}`) === socket.id){
-            tunnels.delete(`${token}/${subdomain}`);
-            console.log(`❌ Tunnel Closed: ${token}/${subdomain}`);
+        if (subdomain && tunnels.get(`${subdomain}`) === socket.id){
+            tunnels.delete(`${subdomain}`);
+            console.log(`❌ Tunnel Closed: ${subdomain}`);
         }
     })
 })

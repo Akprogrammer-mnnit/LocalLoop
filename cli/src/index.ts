@@ -5,7 +5,8 @@ import axios from "axios"
 import chalk from "chalk"
 
 
-const PRODUCTION_SERVER = 'https://localloop-server.onrender.com';
+const PRODUCTION_SERVER = 'http://localhost:3000';
+const PRODUCTION_DASHBOARD_URL = 'http://localhost:5173'
 interface ForwardedRequest {
     id: string;
     method: string;
@@ -52,6 +53,9 @@ socket.on('connect',()=>{
 
 socket.on('registered', (data: { url: string }) => {
     console.log(chalk.green(`\n🎉 Tunnel Live at: ${chalk.bold(data.url)}`));
+    const pathParts = data.url.split('/hook/')[1]
+    const DASHBOARD_URL = PRODUCTION_DASHBOARD_URL;
+    console.log(chalk.cyan(`📊 Dashboard: ${DASHBOARD_URL}/dashboard/${pathParts}`));
     console.log(chalk.yellow(`Waiting for requests...\n`));
 });
 

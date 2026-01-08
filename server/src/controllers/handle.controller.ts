@@ -18,9 +18,8 @@ interface LocalResposne {
     data: any
 }
 export const trafficController = (req: Request , res: Response) => {
-    let {id,subdomain} = req.params
-    subdomain = `${id}/${subdomain}`;
-    console.log(subdomain);
+    let {subdomain} = req.params
+   
     const targetSocketId = tunnels.get(subdomain)
 
     if (!targetSocketId){
