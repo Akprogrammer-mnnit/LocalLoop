@@ -1,21 +1,24 @@
 import React, { useState } from 'react'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../store/store';
 function SignUp() {
     const [email, setEmail] = useState < string > ("")
     const [password, setPassword] = useState < string > ("")
     const [error,setError] = useState<string>("");
     const navigate = useNavigate();
+    const setUser = useAuthStore((s)=>s.setUser);
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     try {
-      await axios.post(
+      const response = await axios.post(
         `${import.meta.env.VITE_SERVER_URL}/api/register`,
         { email, password },
         { withCredentials: true } 
       );
 
+      setUser(response.data.data);
       navigate("/");
     } catch (err: any) {
       setError(

@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useAuthStore } from "./store/store";
-import { Outlet } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 
 function App() {
   const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
 
   const [loading, setLoading] = useState(true);
-
+  const navigate = useNavigate();
   useEffect(() => {
     const fetchCurrentUser = async () => {
       try {
@@ -19,8 +19,11 @@ function App() {
         console.log(res);
 
         setUser(res.data.data);
+
       } catch (error) {
         logout();
+        navigate("/login");
+        
       } finally {
         setLoading(false);
       }

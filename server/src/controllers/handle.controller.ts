@@ -22,20 +22,25 @@ interface LocalResposne {
 export const trafficController = async (req: Request, res: Response) => {
     const { part1 } = req.params;
     
-    const rawRest = req.params.rest || req.params[0] || "";
-    const rest = Array.isArray(rawRest) ? rawRest.join('/') : rawRest as string;
+    const rawRest = req.params.rest;
+    let rest = "";
+
+    if (Array.isArray(rawRest)) {
+        rest = rawRest.join('/');
+    } else if (typeof rawRest === 'string') {
+        rest = rawRest.startsWith('/') ? rawRest.slice(1) : rawRest;
+    }
 
     let socketId: string | undefined;
     let finalSubdomain: string = "";
-    let finalPath: string = ""; 
-
+    let finalPath: string = "";
 
     if (tunnels.has(part1)) {
         socketId = tunnels.get(part1);
         finalSubdomain = part1;
         finalPath = rest;
     } 
-    else {
+    else if (rest) {
         const parts = rest.split('/'); 
         const possibleSubdomain = parts[0]; 
         
@@ -45,7 +50,6 @@ export const trafficController = async (req: Request, res: Response) => {
             if (tunnels.has(key)) {
                 socketId = tunnels.get(key);
                 finalSubdomain = possibleSubdomain;
-               
                 finalPath = parts.slice(1).join('/');
             }
         }
@@ -61,7 +65,7 @@ export const trafficController = async (req: Request, res: Response) => {
     const payload: ForwardRequest = {
         id: crypto.randomUUID(),
         method: req.method,
-        path: finalPath,
+        path: finalPath || "/",
         headers: req.headers,
         body: req.body,
         query: req.query,
@@ -76,8 +80,7 @@ export const trafficController = async (req: Request, res: Response) => {
     if (history.length > 50) history.pop();
 
     io.to(`dashboard-${finalSubdomain}`).emit("new-request", payload);
-    console.log(`📨 Forwarding ${req.method} to ${finalSubdomain}/${finalPath}...`);
-
+    
     io.to(socketId)
         .timeout(5000)
         .emit("incoming-request", payload, (err: any, responses: LocalResposne) => {
@@ -106,7 +109,6 @@ export const trafficController = async (req: Request, res: Response) => {
                 headers: req.headers,
                 body: req.body
             });
-            console.log("💾 Request Saved to History");
         } catch (dbError) {
             console.error("Failed to save log to DB:", dbError);
         }

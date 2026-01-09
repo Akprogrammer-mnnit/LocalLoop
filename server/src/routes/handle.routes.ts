@@ -6,5 +6,5 @@ const router = Router()
 // router.all('/hook/:subdomain/*path', trafficController)
 // router.all('/hook/:subdomain', trafficController)
 
-router.all("/hook/:part1/*rest", trafficController);
+router.all("/hook/:part1{/*rest}", trafficController);
 export default router
