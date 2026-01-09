@@ -22,6 +22,10 @@ const  router = createBrowserRouter([
         element: <Dashboard />
       },
       {
+        path: "/dashboard/:token/:SUBDOMAIN",
+        element: <Dashboard />
+      },
+      {
         path: "/login",
         element: <Login />
       },

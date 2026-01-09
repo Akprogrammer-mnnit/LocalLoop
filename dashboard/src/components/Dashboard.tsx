@@ -19,12 +19,11 @@ function Dashboard() {
   const [requests, setRequests] = useState<RequestLog[]>([]);
   const [selectedReq, setSelectedReq] = useState<RequestLog | null>(null);
   
-  const {SUBDOMAIN} = useParams();
-  console.log(SUBDOMAIN);
+  const {token , SUBDOMAIN} = useParams();
+  const secureId = token ? `${token}/${SUBDOMAIN}` : SUBDOMAIN;
   useEffect(() => {
-    axios.get(`${SERVER_URL}/api/history/${SUBDOMAIN}`).then(res => {
-      setRequests(res.data);
-    });
+    axios.get(`${SERVER_URL}/api/history/${encodeURIComponent(secureId!)}`)
+      .then(res => setRequests(res.data));
 
     const socket = io(SERVER_URL);
     
@@ -44,7 +43,7 @@ function Dashboard() {
     try {
       await axios({
         method: req.method,
-        url: `${SERVER_URL}/hook/${SUBDOMAIN}/${req.path}`,
+        url: `${SERVER_URL}/hook/${encodeURIComponent(secureId!)}/${req.path}`,
         headers: { 'Content-Type': 'application/json' },
         data: req.body
       });
