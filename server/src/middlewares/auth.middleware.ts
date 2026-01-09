@@ -6,7 +6,7 @@ import { User } from "../models/user.model";
 import { AuthRequest } from "../types/auth.request";
 
 dotenv.config();
-
+  
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET!;
 if (!ACCESS_TOKEN_SECRET) {
   throw new Error("ACCESS_TOKEN_SECRET missing");

@@ -31,6 +31,7 @@ program
   .requiredOption('-p, --port <number>', 'Local port to forward', '3000')
   .option('-s, --subdomain <string>', 'Desired subdomain', 'random-dev') 
   .option('-h, --host <string>', 'Proxy Server URL', process.env.PROXY_HOST || PRODUCTION_SERVER)
+  .option('-k, --key <string>','Your Api Key')
   .parse(process.argv);
 
 
@@ -43,7 +44,11 @@ console.log(chalk.gray(`Target: ${LOCAL_TARGET}`));
 console.log(chalk.gray(`Proxy:  ${PROXY_URL}`));
 
 
-const socket: Socket = io(PROXY_URL);
+const socket: Socket = io(PROXY_URL,{
+    auth: {
+        apiKey: options.key
+    }
+});
 
 socket.on('connect',()=>{
     console.log(chalk.green(`\n✅ Connected to Proxy!`));

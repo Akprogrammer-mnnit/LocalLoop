@@ -4,6 +4,8 @@ import dotenv from "dotenv"
 import http from "http"
 import {Server} from "socket.io"
 import cookieParser from "cookie-parser"
+import {User} from "./models/user.model"
+import crypto from 'crypto'
 dotenv.config()
 
 
@@ -27,18 +29,31 @@ const io = new Server(server,{
 export const tunnels = new Map<string, string>()
 export const requestHistory = new Map<string, any[]>()
 
+
+io.use(async(socket,next) => {
+    const apiKey = socket.handshake.auth.apiKey;
+    if (apiKey){
+        const user = await User.findOne({apiKey});
+        if (user){
+            socket.data.userId = user._id;
+            console.log(`🔑 Logged in: ${user.email}`);
+        }
+    }
+    next();
+})
 io.on('connection',(socket)=>{
     console.log(`🔌 New Connection ${socket.id}`)
     socket.on('register',(subdomain:string)=>{
-        if (tunnels.has(`${subdomain}`)){
-            socket.emit("error","Subdomain already in use");
-            return;
+        if (socket.data.userId){
+            tunnels.set(subdomain,socket.id);
+            console.log(`✅ Registered: ${process.env.PROXY_HOST}/hook/${subdomain} -> Socket ${socket.id}`);
+            socket.emit("registered", { url: `${process.env.PROXY_HOST}/hook/${subdomain}` });
         }
-
-        tunnels.set(`${subdomain}`,socket.id);
-        socket.data.subdomain = subdomain
-        console.log(`✅ Registered: https://localloop-server.onrender.com/hook/${subdomain} -> Socket ${socket.id}`);
-        socket.emit("registered", { url: `https://localloop-server.onrender.com/hook/${subdomain}` });
+        else {
+            const token = crypto.randomBytes(32).toString("hex");
+            tunnels.set(`${token}/${subdomain}`,socket.id);
+            socket.emit("registered", { url: `${process.env.PROXY_HOST}/hook/${token}/${subdomain}` });
+        }
     })
 
     socket.on('join-room',(data)=>{
@@ -60,6 +75,7 @@ io.on('connection',(socket)=>{
 import handleRouter from "./routes/handle.routes"
 import apiRouter from "./routes/api.route"
 import userRouter from "./routes/user.route"
+import { getApiKey } from './controllers/user.controller';
 app.use(handleRouter)
 
 app.use("/api",apiRouter)
