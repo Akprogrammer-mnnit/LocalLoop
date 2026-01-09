@@ -22,8 +22,15 @@ function Dashboard() {
   const {token , SUBDOMAIN} = useParams();
   const secureId = token ? `${token}/${SUBDOMAIN}` : SUBDOMAIN;
   useEffect(() => {
-    axios.get(`${SERVER_URL}/api/history/${encodeURIComponent(secureId!)}`)
-      .then(res => setRequests(res.data));
+    
+    const getHistory = async() => {
+      await axios.get(`${SERVER_URL}/api/history/${SUBDOMAIN}`,{withCredentials: true})
+      .then(res => {
+        console.log(res);
+        setRequests(res.data.data)});
+    }
+
+    getHistory();
 
     const socket = io(SERVER_URL);
     

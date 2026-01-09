@@ -19,6 +19,7 @@ export const verifyJWT = async (
 ) => {
   try {
     const token = req.cookies?.accesstoken;
+    
     if (!token) {
       return res.status(401).json({ message: "Unauthorized" });
     }
