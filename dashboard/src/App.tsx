@@ -27,9 +27,7 @@ function App() {
           "/dashboard/:token/:subdomain", 
           location.pathname
         );
-        
-        const isPublicPage = ["/login", "/register", "/"].includes(location.pathname);
-
+        const isPublicPage = ["/login", "/register"].includes(location.pathname);
         if (!isGuestDashboard && !isPublicPage) {
            navigate("/login");
         }

@@ -8,6 +8,7 @@ export interface IRequestLog extends Document {
   headers: any;
   body: any;
   query: any;
+  timestamp: Date;
   createdAt: Date;
 }
 
@@ -38,6 +39,11 @@ const RequestLogSchema = new Schema<IRequestLog>(
     },
     query: {
       type: Object,
+    },
+    timestamp: {
+      type: Date,
+      required: true,
+      default: Date.now,
     },
     createdAt: {
       type: Date,

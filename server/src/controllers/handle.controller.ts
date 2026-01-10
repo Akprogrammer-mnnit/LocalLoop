@@ -21,8 +21,9 @@ interface LocalResposne {
 
 export const trafficController = async (req: Request, res: Response) => {
     const { part1 } = req.params;
-    
+    console.log(part1);
     const rawRest = req.params.rest;
+    console.log(rawRest);
     let rest = "";
 
     if (Array.isArray(rawRest)) {
@@ -31,6 +32,7 @@ export const trafficController = async (req: Request, res: Response) => {
         rest = rawRest.startsWith('/') ? rawRest.slice(1) : rawRest;
     }
 
+    console.log(rest);
     let socketId: string | undefined;
     let finalSubdomain: string = "";
     let finalPath: string = "";
@@ -42,7 +44,7 @@ export const trafficController = async (req: Request, res: Response) => {
     } 
     else if (rest) {
         const parts = rest.split('/'); 
-      
+        
         const possibleSubdomain = parts[0]; 
         
         if (possibleSubdomain) {
@@ -108,7 +110,8 @@ export const trafficController = async (req: Request, res: Response) => {
                 method: req.method,
                 path: finalPath || "/",
                 headers: req.headers,
-                body: req.body
+                body: req.body,
+                timestamp: Date.now()
             });
         } catch (dbError) {
             console.error("Failed to save log to DB:", dbError);
