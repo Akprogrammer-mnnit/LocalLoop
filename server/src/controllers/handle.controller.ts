@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { tunnels, io, requestHistory } from "../app";
 import { RequestLog } from "../models/requestLogs.model";
+import { Tunnel } from "../models/tunnel.model";
 import crypto from "crypto";
 
 interface ForwardRequest {
@@ -21,9 +22,7 @@ interface LocalResposne {
 
 export const trafficController = async (req: Request, res: Response) => {
     const { part1 } = req.params;
-    console.log(part1);
     const rawRest = req.params.rest;
-    console.log(rawRest);
     let rest = "";
 
     if (Array.isArray(rawRest)) {
@@ -32,7 +31,6 @@ export const trafficController = async (req: Request, res: Response) => {
         rest = rawRest.startsWith('/') ? rawRest.slice(1) : rawRest;
     }
 
-    console.log(rest);
     let socketId: string | undefined;
     let finalSubdomain: string = "";
     let finalPath: string = "";
@@ -44,7 +42,6 @@ export const trafficController = async (req: Request, res: Response) => {
     } 
     else if (rest) {
         const parts = rest.split('/'); 
-        
         const possibleSubdomain = parts[0]; 
         
         if (possibleSubdomain) {
@@ -82,7 +79,6 @@ export const trafficController = async (req: Request, res: Response) => {
     history.unshift(payload);
     if (history.length > 50) history.pop();
 
-    
     io.to(`dashboard-${finalSubdomain}`).emit("new-request", payload);
     
     io.to(socketId)
@@ -102,10 +98,14 @@ export const trafficController = async (req: Request, res: Response) => {
         });
 
     const socket = io.sockets.sockets.get(socketId);
-    if (socket && socket.data.userId) {
+    
+    const tunnel = await Tunnel.findOne({ subdomain: finalSubdomain });
+    const ownerId = tunnel ? tunnel.owner : (socket?.data?.userId);
+
+    if (ownerId) {
         try {
             await RequestLog.create({
-                owner: socket.data.userId,
+                owner: ownerId,
                 subdomain: finalSubdomain,
                 method: req.method,
                 path: finalPath || "/",

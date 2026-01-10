@@ -124,7 +124,7 @@ export const loginUser = async (req: Request, res: Response) => {
 
 export const getApiKey = async (req: AuthRequest, res: Response) => {
   try {
-    console.log("start");
+   
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized" });
     }
