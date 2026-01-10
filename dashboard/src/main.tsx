@@ -7,8 +7,7 @@ import SignUp from './components/SignUp.tsx'
 import Login from './components/Login.tsx'
 import Dashboard from './components/Dashboard.tsx'
 import Home from './components/Home.tsx';
-
-const  router = createBrowserRouter([
+const router = createBrowserRouter([
   {
     path: '/',
     element: <App />,

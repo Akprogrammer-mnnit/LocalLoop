@@ -42,6 +42,7 @@ export const trafficController = async (req: Request, res: Response) => {
     } 
     else if (rest) {
         const parts = rest.split('/'); 
+      
         const possibleSubdomain = parts[0]; 
         
         if (possibleSubdomain) {
@@ -79,6 +80,7 @@ export const trafficController = async (req: Request, res: Response) => {
     history.unshift(payload);
     if (history.length > 50) history.pop();
 
+    
     io.to(`dashboard-${finalSubdomain}`).emit("new-request", payload);
     
     io.to(socketId)
@@ -90,7 +92,6 @@ export const trafficController = async (req: Request, res: Response) => {
             }
 
             const response = Array.isArray(responses) ? responses[0] : responses;
-            
             if (!response || !response.status) {
                 console.error("❌ Invalid response from CLI");
                 return res.status(502).json({ error: "Invalid response from CLI" });

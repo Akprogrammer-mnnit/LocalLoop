@@ -89,7 +89,7 @@ function Dashboard() {
                   {new Date(req.timestamp).toLocaleTimeString()}
                 </span>
               </div>
-              <div className="text-sm truncate text-gray-300">/{req.path}</div>
+              <div className="text-sm truncate text-gray-300">{(req.path === "/" ? "" : "/" )}{req.path}</div>
             </div>
           ))}
         </div>
