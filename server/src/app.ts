@@ -7,6 +7,7 @@ import cookieParser from "cookie-parser"
 import {User} from "./models/user.model"
 import {Tunnel} from "./models/tunnel.model" 
 import crypto from 'crypto'
+import {errorHandler} from "./middlewares/error.middleware"
 dotenv.config()
 
 
@@ -121,7 +122,9 @@ app.use(handleRouter)
 app.use("/api",apiRouter)
 
 app.use("/api",userRouter)
+app.use(errorHandler)
 export {
+
     server,
     io
 }   
