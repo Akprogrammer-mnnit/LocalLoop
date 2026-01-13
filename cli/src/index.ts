@@ -5,8 +5,8 @@ import axios from "axios"
 import chalk from "chalk"
 
 
-const PRODUCTION_SERVER = 'http://localhost:3000';
-const PRODUCTION_DASHBOARD_URL = 'http://localhost:5173'
+const PRODUCTION_SERVER = 'https://localloop-server.onrender.com';
+const PRODUCTION_DASHBOARD_URL = 'https://local-loop-gamma.vercel.app'
 interface ForwardedRequest {
     id: string;
     method: string;
