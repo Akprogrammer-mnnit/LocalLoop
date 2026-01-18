@@ -75,7 +75,7 @@ io.on('connection',(socket)=>{
                 socket.data.subdomain = subdomain;
 
                 console.log(`✅ Registered: ${process.env.PROXY_HOST}/hook/${subdomain} -> Socket ${socket.id}`);
-                socket.emit("registered", { url: `${process.env.PROXY_HOST}/hook/${subdomain}` });
+                socket.emit("registered", { url: `${process.env.PROXY_HOST}/hook/${subdomain}/` });
 
             } catch (err) {
                 console.error("Tunnel Registration Error:", err);

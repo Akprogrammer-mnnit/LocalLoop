@@ -59,8 +59,7 @@ socket.on('connect',()=>{
 socket.on('registered', (data: { url: string }) => {
     console.log(chalk.green(`\n🎉 Tunnel Live at: ${chalk.bold(data.url)}`));
     const pathParts = data.url.split('/hook/')[1]
-    const DASHBOARD_URL = PRODUCTION_DASHBOARD_URL;
-    console.log(chalk.cyan(`📊 Dashboard: ${DASHBOARD_URL}/dashboard/${pathParts}`));
+    console.log(chalk.green(`📊 Dashboard: ${PRODUCTION_DASHBOARD_URL}/dashboard/${pathParts}`));
     console.log(chalk.yellow(`Waiting for requests...\n`));
 });
 
@@ -76,7 +75,7 @@ socket.on("incoming-request", async (payload: ForwardedRequest , callback) => {
 
     try {
         delete headers["host"]
-
+        headers["host"] = `localhost:${options.port}`;
         const response = await axios({
             method: method as any,
             url: `${LOCAL_TARGET}/${path}`,
@@ -105,7 +104,10 @@ socket.on("incoming-request", async (payload: ForwardedRequest , callback) => {
         const errorResponse: LocalResponse = {
             status: 502,
             headers: {},
-            data: { error: "LocalLoop CLI could not reach your localhost server." }
+            data: { 
+                error: "LocalLoop Error", 
+                details: error instanceof Error ? error.message : String(error) 
+            }
         };
         callback(errorResponse);
     }

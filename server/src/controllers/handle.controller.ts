@@ -84,7 +84,7 @@ export const trafficController = asyncHandler(
     io.to(`dashboard-${finalSubdomain}`).emit("new-request", payload);
 
     io.to(socketId)
-      .timeout(5000)
+      .timeout(30000)
       .emit(
         "incoming-request",
         payload,
