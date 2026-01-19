@@ -30,6 +30,18 @@ const io = new Server(server,{
 
 export const tunnels = new Map<string, string>()
 export const requestHistory = new Map<string, any[]>()
+export const pendingInterceptions = new Map<string, {
+    res: any,
+    cliSocketId: string,
+    originalPayload: any
+}>();
+export const interceptionActive = new Map<string, boolean>();
+
+interface LocalResponse {
+    status: number;
+    headers: any;
+    data: any;
+}
 
 
 io.use(async(socket,next) => {
@@ -96,6 +108,33 @@ io.on('connection',(socket)=>{
         socket.join(`dashboard-${data}`);   
     })
     
+    socket.on("resume-request", (data: { requestId: string, modifiedBody: any, modifiedHeaders: any }) => {
+        const pending = pendingInterceptions.get(data.requestId);
+
+        if (pending) {
+            const { cliSocketId, originalPayload, res } = pending;
+
+            const finalPayload = {
+                ...originalPayload,
+                body: data.modifiedBody,
+                headers: data.modifiedHeaders
+            };
+
+            io.to(cliSocketId).timeout(5000).emit("incoming-request", finalPayload, (err: any, responses: LocalResponse | LocalResponse[]) => {
+                if (err) {
+                    res.status(504).json({ error: "Timeout waiting for forwarded request" });
+                    return;
+                }
+                const response = Array.isArray(responses) ? responses[0] : responses;
+
+                if (response) {
+                    res.status(response.status).set(response.headers).send(response.data);
+                }
+            });
+
+            pendingInterceptions.delete(data.requestId);
+        }
+    });
     socket.on("disconnect", async ()=>{
         const subdomain = socket.data.subdomain;
        

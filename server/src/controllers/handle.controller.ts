@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { tunnels, io, requestHistory } from "../app";
+import { tunnels, io, requestHistory, interceptionActive, pendingInterceptions } from "../app";
 import { RequestLog } from "../models/requestLogs.model";
 import { Tunnel } from "../models/tunnel.model";
 import crypto from "crypto";
@@ -72,6 +72,20 @@ export const trafficController = asyncHandler(
       query: req.query,
       timestamp: Date.now(),
     };
+
+    if (interceptionActive.get(finalSubdomain)){
+      pendingInterceptions.set(payload.id,{
+        res,
+        cliSocketId: socketId,
+        originalPayload: payload
+      });
+
+      io.to(`dashboard-${finalSubdomain}`).emit("intercepted-request",payload);
+
+      return;
+    }
+
+
 
     if (!requestHistory.has(finalSubdomain)) {
       requestHistory.set(finalSubdomain, []);
