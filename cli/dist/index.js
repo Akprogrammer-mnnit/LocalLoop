@@ -49,6 +49,7 @@ socket.on("incoming-request", async (payload, callback) => {
     console.log(chalk_1.default.blue(`📨 ${method} ${path}`));
     try {
         delete headers["host"];
+        headers["host"] = `localhost:${options.port}`;
         const response = await (0, axios_1.default)({
             method: method,
             url: `${LOCAL_TARGET}/${path}`,
@@ -74,7 +75,10 @@ socket.on("incoming-request", async (payload, callback) => {
         const errorResponse = {
             status: 502,
             headers: {},
-            data: { error: "LocalLoop CLI could not reach your localhost server." }
+            data: {
+                error: "LocalLoop Error",
+                details: error instanceof Error ? error.message : String(error)
+            }
         };
         callback(errorResponse);
     }
