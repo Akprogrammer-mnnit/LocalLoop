@@ -63,11 +63,11 @@ socket.on('registered', (data: { url: string }) => {
     console.log(chalk.yellow(`Waiting for requests...\n`));
 });
 
-socket.on('error', (msg: string) => {
-    console.error(chalk.red(`❌ Error: ${msg}`));
+socket.on('error', (err: any) => {
+    const message = err.message || err; 
+    console.error(chalk.red(`❌ Error: ${message}`));
     process.exit(1);
 });
-
 
 socket.on("incoming-request", async (payload: ForwardedRequest , callback) => {
     const { method, path, body, headers } = payload;

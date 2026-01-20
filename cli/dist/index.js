@@ -40,8 +40,9 @@ socket.on('registered', (data) => {
     console.log(chalk_1.default.green(`📊 Dashboard: ${PRODUCTION_DASHBOARD_URL}/dashboard/${pathParts}`));
     console.log(chalk_1.default.yellow(`Waiting for requests...\n`));
 });
-socket.on('error', (msg) => {
-    console.error(chalk_1.default.red(`❌ Error: ${msg}`));
+socket.on('error', (err) => {
+    const message = err.message || err;
+    console.error(chalk_1.default.red(`❌ Error: ${message}`));
     process.exit(1);
 });
 socket.on("incoming-request", async (payload, callback) => {
