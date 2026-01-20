@@ -135,6 +135,10 @@ io.on('connection',(socket)=>{
             pendingInterceptions.delete(data.requestId);
         }
     });
+    socket.on("toggle-interception", (data: { subdomain: string, active: boolean }) => {
+        interceptionActive.set(data.subdomain, data.active);
+        io.to(`dashboard-${data.subdomain}`).emit("interception-status", data.active);
+    });
     socket.on("disconnect", async ()=>{
         const subdomain = socket.data.subdomain;
        

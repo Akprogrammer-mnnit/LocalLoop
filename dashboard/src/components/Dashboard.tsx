@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import axios from 'axios';
-import { Play, Clock, ArrowRight, Activity, Database, Hash, Globe } from 'lucide-react';
+import { Play, Clock, ArrowRight, Activity, Database, Hash, Globe, Pause, Zap, X, AlertTriangle, Send } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL;
@@ -15,15 +15,28 @@ interface RequestLog {
   headers: any;
 }
 
+interface InterceptedRequest {
+  id: string;
+  method: string;
+  path: string;
+  headers: any;
+  body: any;
+  timestamp: number;
+}
+
 function Dashboard() {
   const [requests, setRequests] = useState<RequestLog[]>([]);
   const [selectedReq, setSelectedReq] = useState<RequestLog | null>(null);
-  
-  const {token , SUBDOMAIN} = useParams();
+  const [isIntercepting, setIsIntercepting] = useState(false);
+  const [pausedRequests, setPausedRequests] = useState<InterceptedRequest[]>([]);
+  const [editingRequest, setEditingRequest] = useState<InterceptedRequest | null>(null);
+  const [editedBody, setEditedBody] = useState("");
+  const { token, SUBDOMAIN } = useParams();
   const secureId = token ? `${token}/${SUBDOMAIN}` : SUBDOMAIN;
+  const [socket, setSocket] = useState<any>(null);
 
   useEffect(() => {
-    const getHistory = async() => {
+    const getHistory = async () => {
       try {
         const res = await axios.get(`${SERVER_URL}/api/history/${SUBDOMAIN}`, { withCredentials: true });
         setRequests(res.data.data);
@@ -34,19 +47,28 @@ function Dashboard() {
 
     getHistory();
 
-    const socket = io(SERVER_URL);
-    
-    socket.on('connect', () => {
+    const newSocket = io(SERVER_URL);
+    setSocket(newSocket);
+
+    newSocket.on('connect', () => {
       console.log("Connected to server")
     });
 
-    socket.on('new-request', (newReq: RequestLog) => {
+    newSocket.on('new-request', (newReq: RequestLog) => {
       setRequests(prev => [newReq, ...prev]);
     });
-    
-    socket.emit('join-room', SUBDOMAIN);
 
-    return () => { socket.disconnect(); };
+    newSocket.on('intercepted-request', (req: InterceptedRequest) => {
+        setPausedRequests((prev) => [req, ...prev]);
+    });
+
+    newSocket.on('interception-status', (status: boolean) => {
+        setIsIntercepting(status);
+    });
+
+    newSocket.emit('join-room', SUBDOMAIN);
+
+    return () => { newSocket.disconnect(); };
   }, [SUBDOMAIN]);
 
   const handleReplay = async (req: RequestLog) => {
@@ -60,7 +82,37 @@ function Dashboard() {
       alert("Replay sent!");
     } catch (err) {
       console.error(err);
-      alert("Replay failed (check console)");
+      alert("Replay failed");
+    }
+  };
+
+  const toggleInterception = () => {
+    const newState = !isIntercepting;
+    setIsIntercepting(newState);
+    socket?.emit("toggle-interception", { 
+        subdomain: SUBDOMAIN, 
+        active: newState 
+    });
+  };
+
+  const forwardRequest = () => {
+    if (!editingRequest) return;
+  
+    try {
+      const parsedBody = JSON.parse(editedBody);
+      
+      socket?.emit("resume-request", {
+        requestId: editingRequest.id,
+        modifiedBody: parsedBody,
+        modifiedHeaders: editingRequest.headers
+      });
+  
+      setPausedRequests((prev) => prev.filter(r => r.id !== editingRequest.id));
+      setEditingRequest(null);
+      setEditedBody("");
+      
+    } catch (e) {
+      alert("Invalid JSON");
     }
   };
 
@@ -73,14 +125,62 @@ function Dashboard() {
           <h1 className="text-xl font-bold flex items-center gap-2 text-gray-900">
             <Activity className="text-cyan-600" /> LocalLoop
           </h1>
-          <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded w-fit">
-            <Globe size={12} />
-            <span className="truncate max-w-50">{SUBDOMAIN}</span>
+          <div className="mt-2 flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded w-fit">
+                <Globe size={12} />
+                <span className="truncate max-w-24">{SUBDOMAIN}</span>
+            </div>
+            <button
+                onClick={toggleInterception}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                isIntercepting 
+                    ? "bg-amber-100 text-amber-700 border border-amber-200 animate-pulse" 
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+            >
+                {isIntercepting ? <Pause size={10} /> : <Play size={10} />}
+                {isIntercepting ? "INTERCEPTING" : "PASSTHROUGH"}
+            </button>
           </div>
         </div>
         
         <div className="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-gray-200">
-          {requests.length === 0 && (
+          
+          {pausedRequests.length > 0 && (
+             <div className="bg-amber-50 border-b border-amber-100">
+                <div className="px-4 py-2 bg-amber-100/50 text-amber-800 text-xs font-bold flex items-center gap-2">
+                    <AlertTriangle size={12} />
+                    PENDING APPROVAL ({pausedRequests.length})
+                </div>
+                {pausedRequests.map(req => (
+                    <div 
+                        key={req.id}
+                        onClick={() => {
+                            setEditingRequest(req);
+                            setEditedBody(JSON.stringify(req.body, null, 2));
+                        }}
+                        className="p-4 border-b border-amber-100 cursor-pointer hover:bg-amber-100/40 transition-colors group"
+                    >
+                        <div className="flex justify-between items-center mb-1">
+                            <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded border ${getMethodColor(req.method)}`}>
+                                {req.method}
+                            </span>
+                            <span className="text-xs text-amber-600 font-mono bg-amber-100 px-1.5 rounded">
+                                PAUSED
+                            </span>
+                        </div>
+                        <div className="text-sm font-medium text-gray-700 truncate font-mono">
+                            {req.path}
+                        </div>
+                        <div className="mt-2 text-xs text-amber-700 font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Zap size={10} /> Click to Inspect
+                        </div>
+                    </div>
+                ))}
+             </div>
+          )}
+
+          {requests.length === 0 && pausedRequests.length === 0 && (
             <div className="p-8 text-center text-gray-400 text-sm">
               Waiting for requests...
             </div>
@@ -186,6 +286,61 @@ function Dashboard() {
           </div>
         )}
       </div>
+
+      {editingRequest && (
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                            <Zap size={18} className="text-amber-500" fill="currentColor" />
+                            Intercept Request
+                        </h3>
+                        <p className="text-xs text-gray-500 font-mono mt-1">{editingRequest.method} {editingRequest.path}</p>
+                    </div>
+                    <button onClick={() => setEditingRequest(null)} className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-200 transition-colors">
+                        <X size={20} />
+                    </button>
+                </div>
+                
+                <div className="p-6 overflow-y-auto flex-1">
+                    <div className="mb-4">
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                            Modify Body (JSON)
+                        </label>
+                        <div className="relative">
+                            <textarea
+                                value={editedBody}
+                                onChange={(e) => setEditedBody(e.target.value)}
+                                className="w-full h-80 bg-gray-900 text-green-400 font-mono text-sm p-4 rounded-lg border border-gray-200 focus:ring-2 focus:ring-cyan-500 focus:outline-none resize-none shadow-inner"
+                                spellCheck="false"
+                            />
+                        </div>
+                    </div>
+                    <div className="p-3 bg-blue-50 text-blue-700 text-xs rounded-lg border border-blue-100 flex items-start gap-2">
+                         <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                         <p>Changes made here will be forwarded to your local application as if they came from the original client.</p>
+                    </div>
+                </div>
+
+                <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                    <button 
+                        onClick={() => setEditingRequest(null)}
+                        className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-200 rounded-lg text-sm transition-colors"
+                    >
+                        Drop Request
+                    </button>
+                    <button 
+                        onClick={forwardRequest}
+                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-bold shadow-lg shadow-green-200 transition-all active:scale-95 flex items-center gap-2"
+                    >
+                        <Send size={16} />
+                        Forward Request
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 }
