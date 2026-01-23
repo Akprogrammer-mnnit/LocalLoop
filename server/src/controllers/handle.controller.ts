@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
-import { tunnels, io, requestHistory, interceptionActive, pendingInterceptions } from "../app";
+import { io, requestHistory, interceptionActive, pendingInterceptions } from "../app";
 import { RequestLog } from "../models/requestLogs.model";
 import { Tunnel } from "../models/tunnel.model";
 import crypto from "crypto";
 import { asyncHandler } from "../utils/asyncHandler";
 import { ApiError } from "../utils/ApiError";
+import redis from "../config/redis";
 
 interface ForwardRequest {
   id: string;
@@ -34,25 +35,27 @@ export const trafficController = asyncHandler(
       rest = rawRest.startsWith("/") ? rawRest.slice(1) : rawRest;
     }
 
-    let socketId: string | undefined;
+    let socketId: string | null = null;
     let finalSubdomain = "";
     let finalPath = "";
 
-    if (tunnels.has(part1)) {
-      socketId = tunnels.get(part1);
+    const directTunnelId = await redis.get(`tunnel:${part1}`);
+
+    if (directTunnelId) {
+      socketId = directTunnelId;
       finalSubdomain = part1;
       finalPath = rest;
     } else if (rest) {
       const parts = rest.split("/");
       const possibleSubdomain = parts[0];
+      const key = `${part1}/${possibleSubdomain}`;
 
-      if (possibleSubdomain) {
-        const key = `${part1}/${possibleSubdomain}`;
-        if (tunnels.has(key)) {
-          socketId = tunnels.get(key);
-          finalSubdomain = possibleSubdomain;
-          finalPath = parts.slice(1).join("/");
-        }
+      const nestedTunnelId = await redis.get(`tunnel:${key}`);
+
+      if (nestedTunnelId) {
+        socketId = nestedTunnelId;
+        finalSubdomain = possibleSubdomain;
+        finalPath = parts.slice(1).join("/");
       }
     }
 
@@ -73,19 +76,17 @@ export const trafficController = asyncHandler(
       timestamp: Date.now(),
     };
 
-    if (interceptionActive.get(finalSubdomain)){
-      pendingInterceptions.set(payload.id,{
+    if (interceptionActive.get(finalSubdomain)) {
+      pendingInterceptions.set(payload.id, {
         res,
         cliSocketId: socketId,
         originalPayload: payload
       });
 
-      io.to(`dashboard-${finalSubdomain}`).emit("intercepted-request",payload);
+      io.to(`dashboard-${finalSubdomain}`).emit("intercepted-request", payload);
 
       return;
     }
-
-
 
     if (!requestHistory.has(finalSubdomain)) {
       requestHistory.set(finalSubdomain, []);

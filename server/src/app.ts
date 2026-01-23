@@ -2,14 +2,18 @@ import express from "express"
 import cors from "cors"
 import dotenv from "dotenv"
 import http from "http"
-import {Server} from "socket.io"
+import { Server } from "socket.io"
 import cookieParser from "cookie-parser"
-import {User} from "./models/user.model"
-import {Tunnel} from "./models/tunnel.model" 
+import { User } from "./models/user.model"
+import { Tunnel } from "./models/tunnel.model"
 import crypto from 'crypto'
-import {errorHandler} from "./middlewares/error.middleware"
-dotenv.config()
+import { errorHandler } from "./middlewares/error.middleware"
+import redis from "./config/redis"
+import handleRouter from "./routes/handle.routes"
+import apiRouter from "./routes/api.route"
+import userRouter from "./routes/user.route"
 
+dotenv.config()
 
 const app = express()
 app.use(cors({
@@ -20,15 +24,13 @@ app.use(express.json())
 app.use(cookieParser())
 const server = http.createServer(app)
 
-
-const io = new Server(server,{
+const io = new Server(server, {
     cors: {
         origin: process.env.ORIGIN,
-        methods: ["GET","POST"]
+        methods: ["GET", "POST"]
     }
 })
 
-export const tunnels = new Map<string, string>()
 export const requestHistory = new Map<string, any[]>()
 export const pendingInterceptions = new Map<string, {
     res: any,
@@ -43,12 +45,11 @@ interface LocalResponse {
     data: any;
 }
 
-
-io.use(async(socket,next) => {
+io.use(async (socket, next) => {
     const apiKey = socket.handshake.auth.apiKey;
-    if (apiKey){
-        const user = await User.findOne({apiKey});
-        if (user){
+    if (apiKey) {
+        const user = await User.findOne({ apiKey });
+        if (user) {
             socket.data.userId = user._id;
             console.log(`🔑 Logged in: ${user.email}`);
         }
@@ -56,25 +57,21 @@ io.use(async(socket,next) => {
     next();
 })
 
-io.on('connection',(socket)=>{
-    console.log(`🔌 New Connection ${socket.id}`)
-    
-    socket.on('register', async (subdomain:string)=>{
-        if (socket.data.userId){
+io.on('connection', (socket) => {
+    console.log(`New Connection ${socket.id}`)
+
+    socket.on('register', async (subdomain: string) => {
+        if (socket.data.userId) {
             try {
-               
                 const existingTunnel = await Tunnel.findOne({ subdomain });
 
                 if (existingTunnel) {
-                   
                     if (existingTunnel.owner.toString() !== socket.data.userId.toString()) {
-                        socket.emit("error", { message: "⛔ Subdomain is taken by another user." });
+                        socket.emit("error", { message: "Subdomain is taken by another user." });
                         return;
                     }
-                  
                     await Tunnel.updateOne({ subdomain }, { isActive: true });
                 } else {
-                   
                     await Tunnel.create({
                         subdomain: subdomain,
                         owner: socket.data.userId,
@@ -82,11 +79,12 @@ io.on('connection',(socket)=>{
                     });
                 }
 
-              
-                tunnels.set(subdomain,socket.id);
+                await redis.set(`tunnel:${subdomain}`, socket.id);
+                await redis.expire(`tunnel:${subdomain}`, 86400);
+
                 socket.data.subdomain = subdomain;
 
-                console.log(`✅ Registered: ${process.env.PROXY_HOST}/hook/${subdomain} -> Socket ${socket.id}`);
+                console.log(`Registered: ${process.env.PROXY_HOST}/hook/${subdomain} -> Socket ${socket.id}`);
                 socket.emit("registered", { url: `${process.env.PROXY_HOST}/hook/${subdomain}/` });
 
             } catch (err) {
@@ -96,18 +94,21 @@ io.on('connection',(socket)=>{
         }
         else {
             const token = crypto.randomBytes(32).toString("hex");
-            
-            tunnels.set(`${token}/${subdomain}`,socket.id);
-            socket.data.subdomain = `${token}/${subdomain}`;
+            const fullSubdomain = `${token}/${subdomain}`;
+
+            await redis.set(`tunnel:${fullSubdomain}`, socket.id);
+            await redis.expire(`tunnel:${fullSubdomain}`, 86400);
+
+            socket.data.subdomain = fullSubdomain;
 
             socket.emit("registered", { url: `${process.env.PROXY_HOST}/hook/${token}/${subdomain}` });
         }
     })
 
-    socket.on('join-room',(data)=>{
-        socket.join(`dashboard-${data}`);   
+    socket.on('join-room', (data) => {
+        socket.join(`dashboard-${data}`);
     })
-    
+
     socket.on("resume-request", (data: { requestId: string, modifiedBody: any, modifiedHeaders: any }) => {
         const pending = pendingInterceptions.get(data.requestId);
 
@@ -135,39 +136,39 @@ io.on('connection',(socket)=>{
             pendingInterceptions.delete(data.requestId);
         }
     });
+
     socket.on("toggle-interception", (data: { subdomain: string, active: boolean }) => {
         interceptionActive.set(data.subdomain, data.active);
         io.to(`dashboard-${data.subdomain}`).emit("interception-status", data.active);
     });
-    socket.on("disconnect", async ()=>{
-        const subdomain = socket.data.subdomain;
-       
-        if (subdomain && tunnels.get(`${subdomain}`) === socket.id){
-            tunnels.delete(`${subdomain}`);
-           
-            if (socket.data.userId) {
-                try {
-                    await Tunnel.updateOne({ subdomain }, { isActive: false });
-                } catch (e) { console.error("Error updating tunnel status:", e); }
-            }
 
-            console.log(`❌ Tunnel Closed: ${subdomain}`);
+    socket.on("disconnect", async () => {
+        const subdomain = socket.data.subdomain;
+
+        if (subdomain) {
+            const storedSocketId = await redis.get(`tunnel:${subdomain}`);
+
+            if (storedSocketId === socket.id) {
+                await redis.del(`tunnel:${subdomain}`);
+
+                if (socket.data.userId) {
+                    try {
+                        await Tunnel.updateOne({ subdomain }, { isActive: false });
+                    } catch (e) { console.error("Error updating tunnel status:", e); }
+                }
+
+                console.log(`Tunnel Closed: ${subdomain}`);
+            }
         }
     })
 })
 
-
-import handleRouter from "./routes/handle.routes"
-import apiRouter from "./routes/api.route"
-import userRouter from "./routes/user.route"
 app.use(handleRouter)
-
-app.use("/api",apiRouter)
-
-app.use("/api",userRouter)
+app.use("/api", apiRouter)
+app.use("/api", userRouter)
 app.use(errorHandler)
-export {
 
+export {
     server,
     io
-}   
+}
