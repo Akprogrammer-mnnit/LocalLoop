@@ -38,8 +38,18 @@ function Dashboard() {
   useEffect(() => {
     const getHistory = async () => {
       try {
-        const res = await axios.get(`${SERVER_URL}/api/history/${SUBDOMAIN}`, { withCredentials: true });
+        let url;
+        if (token) {
+          url = `${SERVER_URL}/api/guest/history/${encodeURIComponent(secureId!)}`;
+        }
+        else {
+          url = `${SERVER_URL}/api/history/${SUBDOMAIN}`;
+        }
+
+        const res = await axios.get(url, { withCredentials: true });
+        console.log(res);
         setRequests(res.data.data);
+
       } catch (e) {
         console.error("Failed to fetch history", e);
       }
@@ -59,17 +69,17 @@ function Dashboard() {
     });
 
     newSocket.on('intercepted-request', (req: InterceptedRequest) => {
-        setPausedRequests((prev) => [req, ...prev]);
+      setPausedRequests((prev) => [req, ...prev]);
     });
 
     newSocket.on('interception-status', (status: boolean) => {
-        setIsIntercepting(status);
+      setIsIntercepting(status);
     });
 
-    newSocket.emit('join-room', SUBDOMAIN);
+    newSocket.emit('join-room', secureId);
 
     return () => { newSocket.disconnect(); };
-  }, [SUBDOMAIN]);
+  }, [SUBDOMAIN, token, secureId]);
 
   const handleReplay = async (req: RequestLog) => {
     try {
@@ -89,28 +99,28 @@ function Dashboard() {
   const toggleInterception = () => {
     const newState = !isIntercepting;
     setIsIntercepting(newState);
-    socket?.emit("toggle-interception", { 
-        subdomain: SUBDOMAIN, 
-        active: newState 
+    socket?.emit("toggle-interception", {
+      subdomain: SUBDOMAIN,
+      active: newState
     });
   };
 
   const forwardRequest = () => {
     if (!editingRequest) return;
-  
+
     try {
       const parsedBody = JSON.parse(editedBody);
-      
+
       socket?.emit("resume-request", {
         requestId: editingRequest.id,
         modifiedBody: parsedBody,
         modifiedHeaders: editingRequest.headers
       });
-  
+
       setPausedRequests((prev) => prev.filter(r => r.id !== editingRequest.id));
       setEditingRequest(null);
       setEditedBody("");
-      
+
     } catch (e) {
       alert("Invalid JSON");
     }
@@ -118,66 +128,65 @@ function Dashboard() {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans text-gray-900">
-      
+
       <div className="w-96 shrink-0 bg-white border-r border-gray-200 flex flex-col shadow-sm z-10">
-        
+
         <div className="p-5 border-b border-gray-200 bg-white">
           <h1 className="text-xl font-bold flex items-center gap-2 text-gray-900">
             <Activity className="text-cyan-600" /> LocalLoop
           </h1>
           <div className="mt-2 flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded w-fit">
-                <Globe size={12} />
-                <span className="truncate max-w-24">{SUBDOMAIN}</span>
+              <Globe size={12} />
+              <span className="truncate max-w-24">{SUBDOMAIN}</span>
             </div>
             <button
-                onClick={toggleInterception}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                isIntercepting 
-                    ? "bg-amber-100 text-amber-700 border border-amber-200 animate-pulse" 
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              onClick={toggleInterception}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${isIntercepting
+                ? "bg-amber-100 text-amber-700 border border-amber-200 animate-pulse"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
             >
-                {isIntercepting ? <Pause size={10} /> : <Play size={10} />}
-                {isIntercepting ? "INTERCEPTING" : "PASSTHROUGH"}
+              {isIntercepting ? <Pause size={10} /> : <Play size={10} />}
+              {isIntercepting ? "INTERCEPTING" : "PASSTHROUGH"}
             </button>
           </div>
         </div>
-        
+
         <div className="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-gray-200">
-          
+
           {pausedRequests.length > 0 && (
-             <div className="bg-amber-50 border-b border-amber-100">
-                <div className="px-4 py-2 bg-amber-100/50 text-amber-800 text-xs font-bold flex items-center gap-2">
-                    <AlertTriangle size={12} />
-                    PENDING APPROVAL ({pausedRequests.length})
+            <div className="bg-amber-50 border-b border-amber-100">
+              <div className="px-4 py-2 bg-amber-100/50 text-amber-800 text-xs font-bold flex items-center gap-2">
+                <AlertTriangle size={12} />
+                PENDING APPROVAL ({pausedRequests.length})
+              </div>
+              {pausedRequests.map(req => (
+                <div
+                  key={req.id}
+                  onClick={() => {
+                    setEditingRequest(req);
+                    setEditedBody(JSON.stringify(req.body, null, 2));
+                  }}
+                  className="p-4 border-b border-amber-100 cursor-pointer hover:bg-amber-100/40 transition-colors group"
+                >
+                  <div className="flex justify-between items-center mb-1">
+                    <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded border ${getMethodColor(req.method)}`}>
+                      {req.method}
+                    </span>
+                    <span className="text-xs text-amber-600 font-mono bg-amber-100 px-1.5 rounded">
+                      PAUSED
+                    </span>
+                  </div>
+                  <div className="text-sm font-medium text-gray-700 truncate font-mono">
+                    {req.path}
+                  </div>
+                  <div className="mt-2 text-xs text-amber-700 font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Zap size={10} /> Click to Inspect
+                  </div>
                 </div>
-                {pausedRequests.map(req => (
-                    <div 
-                        key={req.id}
-                        onClick={() => {
-                            setEditingRequest(req);
-                            setEditedBody(JSON.stringify(req.body, null, 2));
-                        }}
-                        className="p-4 border-b border-amber-100 cursor-pointer hover:bg-amber-100/40 transition-colors group"
-                    >
-                        <div className="flex justify-between items-center mb-1">
-                            <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded border ${getMethodColor(req.method)}`}>
-                                {req.method}
-                            </span>
-                            <span className="text-xs text-amber-600 font-mono bg-amber-100 px-1.5 rounded">
-                                PAUSED
-                            </span>
-                        </div>
-                        <div className="text-sm font-medium text-gray-700 truncate font-mono">
-                            {req.path}
-                        </div>
-                        <div className="mt-2 text-xs text-amber-700 font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Zap size={10} /> Click to Inspect
-                        </div>
-                    </div>
-                ))}
-             </div>
+              ))}
+            </div>
           )}
 
           {requests.length === 0 && pausedRequests.length === 0 && (
@@ -185,9 +194,9 @@ function Dashboard() {
               Waiting for requests...
             </div>
           )}
-          
+
           {requests.map(req => (
-            <div 
+            <div
               key={req.id}
               onClick={() => setSelectedReq(req)}
               className={`group p-4 border-b border-gray-100 cursor-pointer transition-all duration-200 hover:bg-gray-50
@@ -202,7 +211,7 @@ function Dashboard() {
                 </span>
               </div>
               <div className="text-sm font-medium text-gray-700 truncate font-mono">
-                {(req.path === "/" ? "" : "/" )}{req.path}
+                {(req.path === "/" ? "" : "/")}{req.path}
               </div>
             </div>
           ))}
@@ -215,25 +224,25 @@ function Dashboard() {
             <div className="px-8 py-6 bg-white border-b border-gray-200 shadow-sm flex justify-between items-start">
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                   <span className={`px-3 py-1 text-sm font-bold rounded-md shadow-sm border ${getMethodColor(selectedReq.method)}`}>
+                  <span className={`px-3 py-1 text-sm font-bold rounded-md shadow-sm border ${getMethodColor(selectedReq.method)}`}>
                     {selectedReq.method}
                   </span>
                   <h2 className="text-2xl font-bold text-gray-900 font-mono tracking-tight">/{selectedReq.path}</h2>
                 </div>
-                
+
                 <div className="flex gap-6 text-sm text-gray-500 mt-2">
                   <span className="flex items-center gap-1.5">
-                    <Clock size={16} className="text-gray-400"/> 
+                    <Clock size={16} className="text-gray-400" />
                     {new Date(selectedReq.timestamp).toLocaleString()}
                   </span>
                   <span className="flex items-center gap-1.5 font-mono text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-600">
-                    <Hash size={12} className="text-gray-400"/> 
+                    <Hash size={12} className="text-gray-400" />
                     {selectedReq.id}
                   </span>
                 </div>
               </div>
-              
-              <button 
+
+              <button
                 onClick={() => handleReplay(selectedReq)}
                 className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white px-5 py-2.5 rounded-lg font-medium shadow-sm transition-colors active:scale-95"
               >
@@ -243,16 +252,16 @@ function Dashboard() {
 
             <div className="flex-1 overflow-y-auto p-8">
               <div className="max-w-5xl mx-auto space-y-8">
-                
+
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                   <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
-                    <Database size={16} className="text-gray-500"/>
+                    <Database size={16} className="text-gray-500" />
                     <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Request Body</h3>
                   </div>
                   <div className="p-0">
                     <pre className="text-sm text-gray-800 bg-white p-5 overflow-x-auto font-mono leading-relaxed">
-                      {selectedReq.body && Object.keys(selectedReq.body).length > 0 
-                        ? JSON.stringify(selectedReq.body, null, 2) 
+                      {selectedReq.body && Object.keys(selectedReq.body).length > 0
+                        ? JSON.stringify(selectedReq.body, null, 2)
                         : <span className="text-gray-400 italic">No body content</span>}
                     </pre>
                   </div>
@@ -260,7 +269,7 @@ function Dashboard() {
 
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                   <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
-                    <ArrowRight size={16} className="text-gray-500"/>
+                    <ArrowRight size={16} className="text-gray-500" />
                     <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Headers</h3>
                   </div>
                   <div className="divide-y divide-gray-100">
@@ -289,56 +298,56 @@ function Dashboard() {
 
       {editingRequest && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <div>
-                        <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                            <Zap size={18} className="text-amber-500" fill="currentColor" />
-                            Intercept Request
-                        </h3>
-                        <p className="text-xs text-gray-500 font-mono mt-1">{editingRequest.method} {editingRequest.path}</p>
-                    </div>
-                    <button onClick={() => setEditingRequest(null)} className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-200 transition-colors">
-                        <X size={20} />
-                    </button>
-                </div>
-                
-                <div className="p-6 overflow-y-auto flex-1">
-                    <div className="mb-4">
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
-                            Modify Body (JSON)
-                        </label>
-                        <div className="relative">
-                            <textarea
-                                value={editedBody}
-                                onChange={(e) => setEditedBody(e.target.value)}
-                                className="w-full h-80 bg-gray-900 text-green-400 font-mono text-sm p-4 rounded-lg border border-gray-200 focus:ring-2 focus:ring-cyan-500 focus:outline-none resize-none shadow-inner"
-                                spellCheck="false"
-                            />
-                        </div>
-                    </div>
-                    <div className="p-3 bg-blue-50 text-blue-700 text-xs rounded-lg border border-blue-100 flex items-start gap-2">
-                         <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                         <p>Changes made here will be forwarded to your local application as if they came from the original client.</p>
-                    </div>
-                </div>
-
-                <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-                    <button 
-                        onClick={() => setEditingRequest(null)}
-                        className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-200 rounded-lg text-sm transition-colors"
-                    >
-                        Drop Request
-                    </button>
-                    <button 
-                        onClick={forwardRequest}
-                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-bold shadow-lg shadow-green-200 transition-all active:scale-95 flex items-center gap-2"
-                    >
-                        <Send size={16} />
-                        Forward Request
-                    </button>
-                </div>
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <Zap size={18} className="text-amber-500" fill="currentColor" />
+                  Intercept Request
+                </h3>
+                <p className="text-xs text-gray-500 font-mono mt-1">{editingRequest.method} {editingRequest.path}</p>
+              </div>
+              <button onClick={() => setEditingRequest(null)} className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-200 transition-colors">
+                <X size={20} />
+              </button>
             </div>
+
+            <div className="p-6 overflow-y-auto flex-1">
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                  Modify Body (JSON)
+                </label>
+                <div className="relative">
+                  <textarea
+                    value={editedBody}
+                    onChange={(e) => setEditedBody(e.target.value)}
+                    className="w-full h-80 bg-gray-900 text-green-400 font-mono text-sm p-4 rounded-lg border border-gray-200 focus:ring-2 focus:ring-cyan-500 focus:outline-none resize-none shadow-inner"
+                    spellCheck="false"
+                  />
+                </div>
+              </div>
+              <div className="p-3 bg-blue-50 text-blue-700 text-xs rounded-lg border border-blue-100 flex items-start gap-2">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                <p>Changes made here will be forwarded to your local application as if they came from the original client.</p>
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={() => setEditingRequest(null)}
+                className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-200 rounded-lg text-sm transition-colors"
+              >
+                Drop Request
+              </button>
+              <button
+                onClick={forwardRequest}
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-bold shadow-lg shadow-green-200 transition-all active:scale-95 flex items-center gap-2"
+              >
+                <Send size={16} />
+                Forward Request
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

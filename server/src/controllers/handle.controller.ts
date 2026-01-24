@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { io, requestHistory, interceptionActive, pendingInterceptions } from "../app";
+import { io, interceptionActive, pendingInterceptions } from "../app";
 import { RequestLog } from "../models/requestLogs.model";
 import { Tunnel } from "../models/tunnel.model";
 import crypto from "crypto";
@@ -28,7 +28,6 @@ export const trafficController = asyncHandler(
     const { part1 } = req.params;
     const rawRest = req.params.rest;
     let rest = "";
-
     if (Array.isArray(rawRest)) {
       rest = rawRest.join("/");
     } else if (typeof rawRest === "string") {
@@ -54,7 +53,7 @@ export const trafficController = asyncHandler(
 
       if (nestedTunnelId) {
         socketId = nestedTunnelId;
-        finalSubdomain = possibleSubdomain;
+        finalSubdomain = key;
         finalPath = parts.slice(1).join("/");
       }
     }
@@ -87,15 +86,6 @@ export const trafficController = asyncHandler(
 
       return;
     }
-
-    if (!requestHistory.has(finalSubdomain)) {
-      requestHistory.set(finalSubdomain, []);
-    }
-
-    const history = requestHistory.get(finalSubdomain)!;
-    history.unshift(payload);
-    if (history.length > 50) history.pop();
-
     io.to(`dashboard-${finalSubdomain}`).emit("new-request", payload);
 
     io.to(socketId)
@@ -138,6 +128,12 @@ export const trafficController = asyncHandler(
         body: req.body,
         timestamp: Date.now(),
       });
+    }
+    else {
+      const key = `history:${finalSubdomain}`
+      await redis.lpush(key, JSON.stringify(payload));
+      await redis.ltrim(key, 0, 19);
+      await redis.expire(key, 3600);
     }
   }
 );

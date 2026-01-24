@@ -2,7 +2,7 @@ import axios from 'axios'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../store/store'
 import { Link } from "react-router-dom"
-import { Key, Globe, Calendar, ExternalLink } from 'lucide-react' 
+import { Key, Globe, Calendar, ExternalLink } from 'lucide-react'
 
 interface Tunnel {
   _id: string;
@@ -29,7 +29,7 @@ function Home() {
     const fetchTunnels = async () => {
       try {
         const response = await axios.get(
-          `${import.meta.env.VITE_SERVER_URL}/api/getMySubdomains`,
+          `${import.meta.env.VITE_SERVER_URL}/api/my-subdomains`,
           { withCredentials: true }
         );
         setTunnels(response.data.data);
@@ -64,7 +64,7 @@ function Home() {
   return (
     <div className="min-h-screen bg-gray-50 py-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
+
         {/* Header Section */}
         <div className="md:flex md:items-center md:justify-between mb-8">
           <div className="flex-1 min-w-0">
@@ -120,7 +120,7 @@ function Home() {
               Total: {tunnels.length}
             </span>
           </div>
-          
+
           <div className="px-4 py-5 sm:p-0">
             {loading ? (
               <div className="p-10 text-center text-gray-500 animate-pulse">
@@ -169,11 +169,10 @@ function Home() {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                  tunnel.isActive 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-gray-100 text-gray-800'
-                                }`}>
+                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${tunnel.isActive
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-gray-100 text-gray-800'
+                                  }`}>
                                   {tunnel.isActive ? 'Active' : 'Offline'}
                                 </span>
                               </td>
@@ -184,7 +183,7 @@ function Home() {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <Link 
+                                <Link
                                   to={`/dashboard/${tunnel.subdomain}`}
                                   className="text-cyan-600 hover:text-cyan-900 flex items-center justify-end gap-1"
                                 >

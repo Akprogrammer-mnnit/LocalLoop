@@ -1,10 +1,10 @@
-import {Router} from "express"
-import {verifyJWT} from "../middlewares/auth.middleware"
-import { getHistory,getMySubdomains } from "../controllers/api.controller";
+import { Router } from "express";
+import { getHistory, getMySubdomains } from "../controllers/api.controller";
+import { verifyJWT } from "../middlewares/auth.middleware";
 
-const router = Router()
+const router = Router();
+router.route("/history/:subdomain").get(verifyJWT, getHistory);
+router.route("/guest/history/:subdomain").get(getHistory);
+router.route("/my-subdomains").get(verifyJWT, getMySubdomains);
 
-router.get("/history/:subdomain",verifyJWT, getHistory);
-router.get("/getMySubdomains",verifyJWT,getMySubdomains);
-
-export default router
+export default router;

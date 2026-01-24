@@ -31,7 +31,7 @@ const io = new Server(server, {
     }
 })
 
-export const requestHistory = new Map<string, any[]>()
+
 export const pendingInterceptions = new Map<string, {
     res: any,
     cliSocketId: string,
