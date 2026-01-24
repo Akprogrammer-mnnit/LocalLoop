@@ -1,6 +1,6 @@
 {
   "name": "@ayankhandelwal07/local-loop",
-  "version": "1.1.6",
+  "version": "1.1.9",
   "bin": {
     "super-loop": "dist/index.js"
   },

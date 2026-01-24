@@ -10,6 +10,9 @@ const axios_1 = __importDefault(require("axios"));
 const chalk_1 = __importDefault(require("chalk"));
 const PRODUCTION_SERVER = 'https://localloop-server.onrender.com';
 const PRODUCTION_DASHBOARD_URL = 'https://local-loop-gamma.vercel.app';
+// const PRODUCTION_SERVER = 'http://localhost:3000';
+// const PRODUCTION_DASHBOARD_URL = 'http://localhost:5173'
+let heartbeatInterval;
 const program = new commander_1.Command();
 program
     .version('1.0.1')
@@ -36,6 +39,12 @@ socket.on('connect', () => {
 });
 socket.on('registered', (data) => {
     console.log(chalk_1.default.green(`\n🎉 Tunnel Live at: ${chalk_1.default.bold(data.url)}`));
+    const fullId = data.url.split('/hook/')[1];
+    if (heartbeatInterval)
+        clearInterval(heartbeatInterval);
+    heartbeatInterval = setInterval(() => {
+        socket.emit('heartbeat', { subdomain: fullId });
+    }, 30000);
     const pathParts = data.url.split('/hook/')[1];
     console.log(chalk_1.default.green(`📊 Dashboard: ${PRODUCTION_DASHBOARD_URL}/dashboard/${pathParts}`));
     console.log(chalk_1.default.yellow(`Waiting for requests...\n`));
@@ -49,19 +58,34 @@ socket.on("incoming-request", async (payload, callback) => {
     const { method, path, body, headers } = payload;
     console.log(chalk_1.default.blue(`📨 ${method} ${path}`));
     try {
-        delete headers["host"];
-        headers["host"] = `localhost:${options.port}`;
+        const cleanHeaders = { ...headers };
+        Object.keys(cleanHeaders).forEach(key => {
+            const lowerKey = key.toLowerCase();
+            if (lowerKey === 'host' ||
+                lowerKey === 'content-length' ||
+                lowerKey === 'accept-encoding' ||
+                lowerKey === 'origin' ||
+                lowerKey === 'referer') {
+                delete cleanHeaders[key];
+            }
+        });
+        cleanHeaders["host"] = `localhost:${options.port}`;
         const response = await (0, axios_1.default)({
             method: method,
             url: `${LOCAL_TARGET}/${path}`,
-            headers: headers,
+            headers: cleanHeaders,
             data: body,
             validateStatus: () => true
         });
         console.log(chalk_1.default.green(`   ↳ Forwarded Successfully (${response.status})`));
+        const responseHeaders = { ...response.headers };
+        delete responseHeaders["content-length"];
+        delete responseHeaders["transfer-encoding"];
+        delete responseHeaders["content-encoding"];
+        delete responseHeaders["connection"];
         const responseToProxy = {
             status: response.status,
-            headers: response.headers,
+            headers: responseHeaders,
             data: response.data
         };
         callback(responseToProxy);
@@ -85,5 +109,7 @@ socket.on("incoming-request", async (payload, callback) => {
     }
 });
 socket.on('disconnect', () => {
+    if (heartbeatInterval)
+        clearInterval(heartbeatInterval);
     console.log(chalk_1.default.red('\n🔌 Disconnected from Proxy. Retrying...'));
 });

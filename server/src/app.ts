@@ -80,7 +80,7 @@ io.on('connection', (socket) => {
                 }
 
                 await redis.set(`tunnel:${subdomain}`, socket.id);
-                await redis.expire(`tunnel:${subdomain}`, 86400);
+                await redis.expire(`tunnel:${subdomain}`, 60);
 
                 socket.data.subdomain = subdomain;
 
@@ -97,7 +97,7 @@ io.on('connection', (socket) => {
             const fullSubdomain = `${token}/${subdomain}`;
 
             await redis.set(`tunnel:${fullSubdomain}`, socket.id);
-            await redis.expire(`tunnel:${fullSubdomain}`, 86400);
+            await redis.expire(`tunnel:${fullSubdomain}`, 60);
 
             socket.data.subdomain = fullSubdomain;
 
@@ -105,6 +105,13 @@ io.on('connection', (socket) => {
         }
     })
 
+    socket.on('heartbeat', async (data: { subdomain: string }) => {
+        const storedSocketId = await redis.get(`tunnel:${data.subdomain}`);
+
+        if (storedSocketId === socket.id) {
+            await redis.expire(`tunnel:${data.subdomain}`, 60);
+        }
+    });
     socket.on('join-room', (data) => {
         socket.join(`dashboard-${data}`);
     })
