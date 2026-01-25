@@ -6,7 +6,7 @@ import crypto from "crypto";
 import { asyncHandler } from "../utils/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 import redis from "../config/redis";
-
+import { Mock } from "../models/MockRoute.model";
 interface ForwardRequest {
   id: string;
   method: string;
@@ -56,6 +56,30 @@ export const trafficController = asyncHandler(
         finalSubdomain = key;
         finalPath = parts.slice(1).join("/");
       }
+    }
+
+
+    const mockRule = await Mock.findOne({
+      subdomain: finalSubdomain,
+      method: req.method,
+      path: finalPath || "/"
+    });
+
+    if (mockRule) {
+
+      const mockPayload = {
+        id: "MOCK-" + Date.now(),
+        method: req.method,
+        path: finalPath || "/",
+        headers: req.headers,
+        body: req.body || {},
+        query: req.query,
+        timestamp: Date.now(),
+        isMock: true
+      };
+      io.to(`dashboard-${finalSubdomain}`).emit("new-request", mockPayload);
+
+      return res.status(mockRule.status).json(JSON.parse(mockRule.body));
     }
 
     if (!socketId) {
