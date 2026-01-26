@@ -60,7 +60,10 @@ io.use(async (socket, next) => {
 io.on('connection', (socket) => {
     console.log(`New Connection ${socket.id}`)
 
-    socket.on('register', async (subdomain: string) => {
+    socket.on('register', async (data: { subdomain: string, auth?: string } | string) => {
+        const subdomain = typeof data === 'string' ? data : data.subdomain;
+        const authCredentials = typeof data === 'object' ? data.auth : null;
+
         if (socket.data.userId) {
             try {
                 const existingTunnel = await Tunnel.findOne({ subdomain });
@@ -82,6 +85,11 @@ io.on('connection', (socket) => {
                 await redis.set(`tunnel:${subdomain}`, socket.id);
                 await redis.expire(`tunnel:${subdomain}`, 60);
 
+                if (authCredentials) {
+                    await redis.set(`auth:${subdomain}`, authCredentials);
+                    await redis.expire(`auth:${subdomain}`, 60);
+                }
+
                 socket.data.subdomain = subdomain;
 
                 console.log(`Registered: ${process.env.PROXY_HOST}/hook/${subdomain} -> Socket ${socket.id}`);
@@ -99,9 +107,14 @@ io.on('connection', (socket) => {
             await redis.set(`tunnel:${fullSubdomain}`, socket.id);
             await redis.expire(`tunnel:${fullSubdomain}`, 60);
 
+            if (authCredentials) {
+                await redis.set(`auth:${fullSubdomain}`, authCredentials);
+                await redis.expire(`auth:${fullSubdomain}`, 60);
+            }
+
             socket.data.subdomain = fullSubdomain;
 
-            socket.emit("registered", { url: `${process.env.PROXY_HOST}/hook/${token}/${subdomain}` });
+            socket.emit("registered", { url: `${process.env.PROXY_HOST}/hook/${token}/${subdomain}/` });
         }
     })
 
@@ -110,6 +123,7 @@ io.on('connection', (socket) => {
 
         if (storedSocketId === socket.id) {
             await redis.expire(`tunnel:${data.subdomain}`, 60);
+            await redis.expire(`auth:${data.subdomain}`, 60);
         }
     });
     socket.on('join-room', (data) => {

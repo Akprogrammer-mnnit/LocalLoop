@@ -59,12 +59,36 @@ export const trafficController = asyncHandler(
     }
 
 
+    const requiredAuth = await redis.get(`auth:${finalSubdomain}`);
+
+    if (requiredAuth) {
+
+      const authHeader = req.headers.authorization || '';
+      const [type, credentials] = authHeader.split(' ');
+
+      let isAuthenticated = false;
+
+      if (type === 'Basic' && credentials) {
+
+        const userPass = Buffer.from(credentials, 'base64').toString();
+        if (userPass === requiredAuth) {
+          isAuthenticated = true;
+        }
+      }
+
+      if (!isAuthenticated) {
+
+        res.set('WWW-Authenticate', `Basic realm="Restricted Area: ${finalSubdomain}"`);
+        return res.status(401).send('Authentication required.');
+      }
+    }
+    const searchPath = finalPath.startsWith("/") ? finalPath : `/${finalPath}`;
+
     const mockRule = await Mock.findOne({
       subdomain: finalSubdomain,
       method: req.method,
-      path: finalPath || "/"
+      path: searchPath
     });
-
     if (mockRule) {
 
       const mockPayload = {

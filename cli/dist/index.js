@@ -8,10 +8,10 @@ const commander_1 = require("commander");
 const socket_io_client_1 = require("socket.io-client");
 const axios_1 = __importDefault(require("axios"));
 const chalk_1 = __importDefault(require("chalk"));
-const PRODUCTION_SERVER = 'https://localloop-server.onrender.com';
-const PRODUCTION_DASHBOARD_URL = 'https://local-loop-gamma.vercel.app';
-// const PRODUCTION_SERVER = 'http://localhost:3000';
-// const PRODUCTION_DASHBOARD_URL = 'http://localhost:5173'
+// const PRODUCTION_SERVER = 'https://localloop-server.onrender.com';
+// const PRODUCTION_DASHBOARD_URL = 'https://local-loop-gamma.vercel.app'
+const PRODUCTION_SERVER = 'http://localhost:3000';
+const PRODUCTION_DASHBOARD_URL = 'http://localhost:5173';
 let heartbeatInterval;
 const program = new commander_1.Command();
 program
@@ -20,6 +20,7 @@ program
     .option('-s, --subdomain <string>', 'Desired subdomain', 'random-dev')
     .option('-h, --host <string>', 'Proxy Server URL', process.env.PROXY_HOST || PRODUCTION_SERVER)
     .option('-k, --key <string>', 'Your Api Key')
+    .option('-a, --auth <string>', 'Basic Auth (user:password)')
     .parse(process.argv);
 const options = program.opts();
 const LOCAL_TARGET = `http://localhost:${options.port}`;
@@ -35,7 +36,10 @@ const socket = (0, socket_io_client_1.io)(PROXY_URL, {
 socket.on('connect', () => {
     console.log(chalk_1.default.green(`\n✅ Connected to Proxy!`));
     console.log(`Registering subdomain: ${chalk_1.default.bold(options.subdomain)}...`);
-    socket.emit('register', options.subdomain);
+    socket.emit('register', {
+        subdomain: options.subdomain,
+        auth: options.auth
+    });
 });
 socket.on('registered', (data) => {
     console.log(chalk_1.default.green(`\n🎉 Tunnel Live at: ${chalk_1.default.bold(data.url)}`));

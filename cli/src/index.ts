@@ -5,10 +5,10 @@ import axios from "axios"
 import chalk from "chalk"
 
 
-const PRODUCTION_SERVER = 'https://localloop-server.onrender.com';
-const PRODUCTION_DASHBOARD_URL = 'https://local-loop-gamma.vercel.app'
-// const PRODUCTION_SERVER = 'http://localhost:3000';
-// const PRODUCTION_DASHBOARD_URL = 'http://localhost:5173'
+// const PRODUCTION_SERVER = 'https://localloop-server.onrender.com';
+// const PRODUCTION_DASHBOARD_URL = 'https://local-loop-gamma.vercel.app'
+const PRODUCTION_SERVER = 'http://localhost:3000';
+const PRODUCTION_DASHBOARD_URL = 'http://localhost:5173'
 let heartbeatInterval: NodeJS.Timeout;
 interface ForwardedRequest {
     id: string;
@@ -35,6 +35,7 @@ program
     .option('-s, --subdomain <string>', 'Desired subdomain', 'random-dev')
     .option('-h, --host <string>', 'Proxy Server URL', process.env.PROXY_HOST || PRODUCTION_SERVER)
     .option('-k, --key <string>', 'Your Api Key')
+    .option('-a, --auth <string>', 'Basic Auth (user:password)')
     .parse(process.argv);
 
 
@@ -56,7 +57,10 @@ const socket: Socket = io(PROXY_URL, {
 socket.on('connect', () => {
     console.log(chalk.green(`\n✅ Connected to Proxy!`));
     console.log(`Registering subdomain: ${chalk.bold(options.subdomain)}...`);
-    socket.emit('register', options.subdomain);
+    socket.emit('register', {
+        subdomain: options.subdomain,
+        auth: options.auth
+    });
 })
 
 socket.on('registered', (data: { url: string }) => {
