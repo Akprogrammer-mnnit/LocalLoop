@@ -18,6 +18,7 @@ interface RequestLog {
 
 interface InterceptedRequest {
   id: string;
+  type: 'request';
   method: string;
   path: string;
   headers: any;
@@ -25,13 +26,27 @@ interface InterceptedRequest {
   timestamp: number;
 }
 
+interface InterceptedResponse {
+  id: string;
+  type: 'response';
+  requestId: string;
+  status: number;
+  headers: any;
+  body: any;
+}
+
 function Dashboard() {
   const [requests, setRequests] = useState<RequestLog[]>([]);
   const [selectedReq, setSelectedReq] = useState<RequestLog | null>(null);
   const [isIntercepting, setIsIntercepting] = useState(false);
-  const [pausedRequests, setPausedRequests] = useState<InterceptedRequest[]>([]);
-  const [editingRequest, setEditingRequest] = useState<InterceptedRequest | null>(null);
+  const [pausedItems, setPausedItems] = useState<(InterceptedRequest | InterceptedResponse)[]>([]);
+  const [editingItem, setEditingItem] = useState<(InterceptedRequest | InterceptedResponse) | null>(null);
+
   const [editedBody, setEditedBody] = useState("");
+  const [editedStatus, setEditedStatus] = useState(200);
+  const [editedHeaders, setEditedHeaders] = useState<Record<string, string>>({});
+  const [activeEditorTab, setActiveEditorTab] = useState<'body' | 'headers'>('body');
+
   const { token, SUBDOMAIN } = useParams();
   const secureId = token ? `${token}/${SUBDOMAIN}` : SUBDOMAIN;
   const [socket, setSocket] = useState<any>(null);
@@ -69,8 +84,12 @@ function Dashboard() {
       setRequests(prev => [newReq, ...prev]);
     });
 
-    newSocket.on('intercepted-request', (req: InterceptedRequest) => {
-      setPausedRequests((prev) => [req, ...prev]);
+    newSocket.on('intercepted-request', (req: any) => {
+      setPausedItems((prev) => [{ ...req, type: 'request' }, ...prev]);
+    });
+
+    newSocket.on('intercepted-response', (res: any) => {
+      setPausedItems((prev) => [{ ...res, type: 'response' }, ...prev]);
     });
 
     newSocket.on('interception-status', (status: boolean) => {
@@ -106,25 +125,55 @@ function Dashboard() {
     });
   };
 
-  const forwardRequest = () => {
-    if (!editingRequest) return;
+  const handleForward = () => {
+    if (!editingItem) return;
 
     try {
       const parsedBody = JSON.parse(editedBody);
 
-      socket?.emit("resume-request", {
-        requestId: editingRequest.id,
-        modifiedBody: parsedBody,
-        modifiedHeaders: editingRequest.headers
-      });
+      if (editingItem.type === 'request') {
+        socket?.emit("resume-request", {
+          requestId: editingItem.id,
+          modifiedBody: parsedBody,
+          modifiedHeaders: editedHeaders
+        });
+      } else {
+        socket?.emit("resume-response", {
+          id: editingItem.id,
+          status: editedStatus,
+          body: parsedBody,
+          headers: editedHeaders
+        });
+      }
 
-      setPausedRequests((prev) => prev.filter(r => r.id !== editingRequest.id));
-      setEditingRequest(null);
+      setPausedItems((prev) => prev.filter(r => r.id !== editingItem.id));
+      setEditingItem(null);
       setEditedBody("");
+      setEditedHeaders({});
 
     } catch (e) {
       alert("Invalid JSON");
     }
+  };
+
+  const openEditor = (item: InterceptedRequest | InterceptedResponse) => {
+    setEditingItem(item);
+    setEditedBody(JSON.stringify(item.body, null, 2));
+    setEditedHeaders(item.headers || {});
+    if (item.type === 'response') {
+      setEditedStatus(item.status);
+    }
+    setActiveEditorTab('body');
+  };
+
+  const updateHeader = (key: string, value: string) => {
+    setEditedHeaders(prev => ({ ...prev, [key]: value }));
+  };
+
+  const deleteHeader = (key: string) => {
+    const next = { ...editedHeaders };
+    delete next[key];
+    setEditedHeaders(next);
   };
 
   return (
@@ -181,31 +230,32 @@ function Dashboard() {
             </div>
 
             <div className="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-gray-200">
-              {pausedRequests.length > 0 && (
+              {pausedItems.length > 0 && (
                 <div className="bg-amber-50 border-b border-amber-100">
                   <div className="px-4 py-2 bg-amber-100/50 text-amber-800 text-xs font-bold flex items-center gap-2">
                     <AlertTriangle size={12} />
-                    PENDING APPROVAL ({pausedRequests.length})
+                    PENDING APPROVAL ({pausedItems.length})
                   </div>
-                  {pausedRequests.map(req => (
+                  {pausedItems.map(item => (
                     <div
-                      key={req.id}
-                      onClick={() => {
-                        setEditingRequest(req);
-                        setEditedBody(JSON.stringify(req.body, null, 2));
-                      }}
+                      key={item.id}
+                      onClick={() => openEditor(item)}
                       className="p-4 border-b border-amber-100 cursor-pointer hover:bg-amber-100/40 transition-colors group"
                     >
                       <div className="flex justify-between items-center mb-1">
-                        <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded border ${getMethodColor(req.method)}`}>
-                          {req.method}
-                        </span>
-                        <span className="text-xs text-amber-600 font-mono bg-amber-100 px-1.5 rounded">
-                          PAUSED
-                        </span>
+                        {item.type === 'request' ? (
+                          <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded border bg-blue-50 text-blue-700 border-blue-200`}>
+                            {item.method} REQUEST
+                          </span>
+                        ) : (
+                          <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded border bg-purple-50 text-purple-700 border-purple-200`}>
+                            RESPONSE ({item.status})
+                          </span>
+                        )}
+                        <span className="text-xs text-amber-600 font-mono bg-amber-100 px-1.5 rounded">PAUSED</span>
                       </div>
-                      <div className="text-sm font-medium text-gray-700 truncate font-mono">
-                        {req.path}
+                      <div className="text-sm font-medium text-gray-700 truncate font-mono mt-1">
+                        {item.type === 'request' ? item.path : `Response for Request...`}
                       </div>
                       <div className="mt-2 text-xs text-amber-700 font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Zap size={10} /> Click to Inspect
@@ -215,7 +265,7 @@ function Dashboard() {
                 </div>
               )}
 
-              {requests.length === 0 && pausedRequests.length === 0 && (
+              {requests.length === 0 && pausedItems.length === 0 && (
                 <div className="p-8 text-center text-gray-400 text-sm">
                   Waiting for requests...
                 </div>
@@ -324,55 +374,123 @@ function Dashboard() {
         </>
       )}
 
-      {editingRequest && (
+      {editingItem && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
+
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                   <Zap size={18} className="text-amber-500" fill="currentColor" />
-                  Intercept Request
+                  {editingItem.type === 'request' ? 'Intercept Request' : 'Intercept Response'}
                 </h3>
-                <p className="text-xs text-gray-500 font-mono mt-1">{editingRequest.method} {editingRequest.path}</p>
+                <div className="flex gap-2 mt-1">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${editingItem.type === 'request' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
+                    {editingItem.type === 'request' ? editingItem.method : `STATUS ${editingItem.status}`}
+                  </span>
+                  {editingItem.type === 'request' && <span className="text-xs font-mono text-gray-500">{editingItem.path}</span>}
+                </div>
               </div>
-              <button onClick={() => setEditingRequest(null)} className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-200 transition-colors">
+              <button onClick={() => setEditingItem(null)} className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-200">
                 <X size={20} />
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1">
-              <div className="mb-4">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
-                  Modify Body (JSON)
-                </label>
-                <div className="relative">
-                  <textarea
-                    value={editedBody}
-                    onChange={(e) => setEditedBody(e.target.value)}
-                    className="w-full h-80 bg-gray-900 text-green-400 font-mono text-sm p-4 rounded-lg border border-gray-200 focus:ring-2 focus:ring-cyan-500 focus:outline-none resize-none shadow-inner"
-                    spellCheck="false"
-                  />
-                </div>
-              </div>
-              <div className="p-3 bg-blue-50 text-blue-700 text-xs rounded-lg border border-blue-100 flex items-start gap-2">
-                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                <p>Changes made here will be forwarded to your local application as if they came from the original client.</p>
-              </div>
-            </div>
-
-            <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+            <div className="flex border-b border-gray-200 bg-white px-6">
               <button
-                onClick={() => setEditingRequest(null)}
-                className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-200 rounded-lg text-sm transition-colors"
+                onClick={() => setActiveEditorTab('body')}
+                className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors ${activeEditorTab === 'body' ? 'border-cyan-500 text-cyan-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
               >
-                Drop Request
+                JSON Body
               </button>
               <button
-                onClick={forwardRequest}
+                onClick={() => setActiveEditorTab('headers')}
+                className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors ${activeEditorTab === 'headers' ? 'border-cyan-500 text-cyan-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              >
+                Headers ({Object.keys(editedHeaders).length})
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 bg-gray-50/50">
+
+              {editingItem.type === 'response' && (
+                <div className="mb-6 bg-white p-4 rounded-lg border border-purple-100 shadow-sm flex items-center gap-4">
+                  <label className="text-xs font-bold text-purple-700 uppercase tracking-wide">Status Code</label>
+                  <input
+                    type="number"
+                    value={editedStatus}
+                    onChange={(e) => setEditedStatus(Number(e.target.value))}
+                    className="w-24 px-3 py-1 border border-gray-300 rounded font-mono font-bold focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+              )}
+
+              {activeEditorTab === 'body' && (
+                <textarea
+                  value={editedBody}
+                  onChange={(e) => setEditedBody(e.target.value)}
+                  className="w-full h-80 bg-gray-900 text-green-400 font-mono text-sm p-4 rounded-lg border border-gray-200 focus:ring-2 focus:ring-cyan-500 focus:outline-none resize-none shadow-inner"
+                  spellCheck="false"
+                />
+              )}
+
+              {activeEditorTab === 'headers' && (
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-xs text-gray-400 uppercase font-bold">Key / Value</p>
+                    <button
+                      onClick={() => updateHeader(`new-header-${Date.now()}`, "")}
+                      className="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded font-bold text-gray-700"
+                    >
+                      + Add Header
+                    </button>
+                  </div>
+                  {Object.entries(editedHeaders).map(([key, value]) => (
+                    <div key={key} className="flex gap-2 group">
+                      <input
+                        className="w-1/3 bg-white border border-gray-300 rounded px-3 py-2 text-sm font-bold text-gray-700 focus:ring-1 focus:ring-cyan-500 outline-none"
+                        value={key}
+                        onChange={(e) => {
+                          const val = editedHeaders[key];
+                          deleteHeader(key);
+                          updateHeader(e.target.value, val);
+                        }}
+                      />
+                      <input
+                        className="flex-1 bg-white border border-gray-300 rounded px-3 py-2 text-sm font-mono text-gray-600 focus:ring-1 focus:ring-cyan-500 outline-none"
+                        value={String(value)}
+                        onChange={(e) => updateHeader(key, e.target.value)}
+                      />
+                      <button
+                        onClick={() => deleteHeader(key)}
+                        className="text-gray-400 hover:text-red-500 p-2"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+
+                  <div className="mt-4 p-3 bg-blue-50 text-blue-700 text-xs rounded border border-blue-100 flex gap-2">
+                    <Activity size={14} className="mt-0.5" />
+                    <p>To edit Cookies, look for the <strong>Cookie</strong> header (Requests) or <strong>Set-Cookie</strong> (Responses).</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-gray-100 bg-white flex justify-end gap-3">
+              <button
+                onClick={() => setEditingItem(null)}
+                className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleForward}
                 className="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-bold shadow-lg shadow-green-200 transition-all active:scale-95 flex items-center gap-2"
               >
                 <Send size={16} />
-                Forward Request
+                {editingItem.type === 'request' ? 'Forward Request' : 'Resume Response'}
               </button>
             </div>
           </div>

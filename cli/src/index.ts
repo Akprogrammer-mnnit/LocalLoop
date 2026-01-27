@@ -65,7 +65,7 @@ socket.on('connect', () => {
 
 socket.on('registered', (data: { url: string }) => {
     console.log(chalk.green(`\n🎉 Tunnel Live at: ${chalk.bold(data.url)}`));
-    const fullId = data.url.split('/hook/')[1];
+    const fullId = data.url.split('/hook/')[1].replace(/\/$/, "");
     if (heartbeatInterval) clearInterval(heartbeatInterval);
     heartbeatInterval = setInterval(() => {
         socket.emit('heartbeat', { subdomain: fullId });
