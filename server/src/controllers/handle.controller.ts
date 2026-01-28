@@ -21,6 +21,7 @@ interface LocalResponse {
   status: number;
   headers: any;
   data: any;
+  isBinary?: boolean;
 }
 
 export const trafficController = asyncHandler(
@@ -158,7 +159,12 @@ export const trafficController = asyncHandler(
               .json({ error: "Invalid response from CLI" });
           }
 
-          res.status(response.status).set(response.headers).send(response.data);
+          let finalData = response.data;
+          if (response.isBinary) {
+            finalData = Buffer.from(response.data, 'base64');
+          }
+
+          res.status(response.status).set(response.headers).send(finalData);
         }
       );
 
