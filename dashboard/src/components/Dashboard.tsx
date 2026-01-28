@@ -120,7 +120,7 @@ function Dashboard() {
     const newState = !isIntercepting;
     setIsIntercepting(newState);
     socket?.emit("toggle-interception", {
-      subdomain: SUBDOMAIN,
+      subdomain: secureId,
       active: newState
     });
   };
