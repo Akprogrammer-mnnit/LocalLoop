@@ -103,16 +103,23 @@ function Dashboard() {
 
   const handleReplay = async (req: RequestLog) => {
     try {
-      await axios({
+      const cleanHeaders = { ...req.headers };
+      delete cleanHeaders['host'];
+      delete cleanHeaders['content-length'];
+      delete cleanHeaders['connection'];
+      delete cleanHeaders['accept-encoding'];
+      const response = await axios({
         method: req.method,
         url: `${SERVER_URL}/hook/${encodeURIComponent(secureId!)}/${req.path}`,
-        headers: { 'Content-Type': 'application/json' },
+        headers: cleanHeaders,
         data: req.body
       });
-      alert("Replay sent!");
+      alert(`✅ Replay Successful!\n\nBackend Replied:\n${JSON.stringify(response.data, null, 2)}`);
+      console.log("Replay Response:", response.data);
+
     } catch (err) {
       console.error(err);
-      alert("Replay failed");
+      alert("❌ Replay Failed. Check console for details.");
     }
   };
 

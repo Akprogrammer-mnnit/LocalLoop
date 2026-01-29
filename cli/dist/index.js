@@ -11,10 +11,8 @@ const chalk_1 = __importDefault(require("chalk"));
 const boxen_1 = __importDefault(require("boxen"));
 const ora_1 = __importDefault(require("ora"));
 const clipboardy_1 = __importDefault(require("clipboardy"));
-// const PRODUCTION_SERVER = 'https://localloop-server.onrender.com';
-// const PRODUCTION_DASHBOARD_URL = 'https://local-loop-gamma.vercel.app'
-const PRODUCTION_SERVER = 'http://localhost:3000';
-const PRODUCTION_DASHBOARD_URL = 'http://localhost:5173';
+const PRODUCTION_SERVER = 'https://localloop-server.onrender.com';
+const PRODUCTION_DASHBOARD_URL = 'https://local-loop-gamma.vercel.app';
 const program = new commander_1.Command();
 program
     .version('1.0.1')
