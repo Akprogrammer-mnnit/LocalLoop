@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { io, interceptionActive, pendingInterceptions } from "../app";
+import { io, interceptionActive, pendingInterceptions, chaosSettings } from "../app";
 import { RequestLog } from "../models/requestLogs.model";
 import { Tunnel } from "../models/tunnel.model";
 import crypto from "crypto";
@@ -83,6 +83,32 @@ export const trafficController = asyncHandler(
         return res.status(401).send('Authentication required.');
       }
     }
+
+    const chaos = chaosSettings.get(finalSubdomain);
+
+    if (chaos && chaos.type !== 'none') {
+      if (chaos.type == 'slow') {
+        await new Promise(resolve => setTimeout(resolve, chaos.value));
+      }
+      else if (chaos.type == 'flaky') {
+        const shouldFail = Math.random() * 100 < chaos.value;
+
+        if (shouldFail) {
+          io.to(`dashboard-${finalSubdomain}`).emit("new-request", {
+            id: "CHAOS-" + Date.now(),
+            method: req.method,
+            path: finalPath || "/",
+            headers: req.headers,
+            body: req.body,
+            timestamp: Date.now(),
+            status: 500,
+            error: "Artificial Chaos Failure"
+          });
+          return res.status(500).json({ error: "Chaos Mode: Artificial Failure Triggered 💥" });
+        }
+      }
+    }
+
     const searchPath = finalPath.startsWith("/") ? finalPath : `/${finalPath}`;
 
     const mockRule = await Mock.findOne({
