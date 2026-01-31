@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getHistory, getMySubdomains } from "../controllers/api.controller";
+import { getHistory, getMySubdomains, getSessions, saveSession, deleteSession } from "../controllers/api.controller";
 import { getMocks, addMock, deleteMock } from "../controllers/mock.controller";
 import { verifyJWT } from "../middlewares/auth.middleware";
 
@@ -10,5 +10,7 @@ router.route("/my-subdomains").get(verifyJWT, getMySubdomains);
 router.get("/mocks/:subdomain", getMocks);
 router.post("/mocks", addMock);
 router.delete("/mocks/:id", deleteMock);
-
+router.get("/sessions/:subdomain", getSessions);
+router.post("/sessions", saveSession);
+router.delete("/sessions/:id", deleteSession);
 export default router;

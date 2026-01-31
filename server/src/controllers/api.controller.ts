@@ -5,6 +5,7 @@ import { Tunnel } from "../models/tunnel.model";
 import { ApiError } from "../utils/ApiError";
 import { asyncHandler } from "../utils/asyncHandler";
 import redis from "../config/redis";
+import { Session } from "../models/session.model";
 export const getHistory = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { subdomain } = req.params;
@@ -55,3 +56,35 @@ export const getMySubdomains = asyncHandler(
     });
   }
 );
+
+
+export const saveSession = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { subdomain, name, requests } = req.body;
+
+  if (!requests || requests.length === 0) {
+    throw new ApiError(400, "Cannot save empty session");
+  }
+
+  const owner = req.user?._id;
+
+  const session = await Session.create({
+    owner,
+    subdomain,
+    name,
+    requests
+  });
+
+  res.status(201).json({ success: true, data: session });
+});
+
+export const getSessions = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { subdomain } = req.params;
+  const sessions = await Session.find({ subdomain }).sort({ createdAt: -1 });
+  res.status(200).json({ data: sessions });
+});
+
+export const deleteSession = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  await Session.findByIdAndDelete(id);
+  res.status(200).json({ success: true });
+});
