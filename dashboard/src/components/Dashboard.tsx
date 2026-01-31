@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import axios from 'axios';
-import { Play, Clock, ArrowRight, Activity, Database, Hash, Pause, Zap, X, AlertTriangle, Send, Layout, AlertOctagon } from 'lucide-react';
+import { Play, Clock, ArrowRight, Activity, Database, Hash, Pause, Zap, X, AlertTriangle, Send, Layout, AlertOctagon, Film } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import Mocks from './Mock';
 import Chaos from './Chaos';
-
+import Recorder from './Recorder';
 const SERVER_URL = import.meta.env.VITE_SERVER_URL;
 
 interface RequestLog {
@@ -51,7 +51,7 @@ function Dashboard() {
   const { token, SUBDOMAIN } = useParams();
   const secureId = token ? `${token}/${SUBDOMAIN}` : SUBDOMAIN;
   const [socket, setSocket] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'requests' | 'mocks' | 'chaos'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'mocks' | 'chaos' | 'recorder'>('requests');
 
   useEffect(() => {
     const getHistory = async () => {
@@ -214,9 +214,20 @@ function Dashboard() {
         >
           <AlertOctagon size={20} />
         </button>
+        <button
+          onClick={() => setActiveTab('recorder')}
+          className={`p-3 rounded-xl transition-all ${activeTab === 'recorder' ? 'bg-gray-900 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-100'}`}
+          title="Session Recorder"
+        >
+          <Film size={20} />
+        </button>
       </div>
 
-      {activeTab === 'chaos' ? (
+      {activeTab === 'recorder' ? (
+        <div className="flex-1 bg-gray-50">
+          <Recorder subdomain={SUBDOMAIN!} secureId={secureId!} requests={requests} />
+        </div>
+      ) : activeTab === 'chaos' ? (
         <div className="flex-1 bg-gray-50">
           <Chaos subdomain={SUBDOMAIN!} secureId={secureId!} socket={socket} />
         </div>
