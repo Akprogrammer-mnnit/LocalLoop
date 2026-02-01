@@ -39,6 +39,7 @@ export const pendingInterceptions = new Map<string, {
 }>();
 export const interceptionActive = new Map<string, boolean>();
 export const chaosSettings = new Map<string, { type: 'none' | 'slow' | 'flaky', value: number }>()
+export const trafficRules = new Map<string, string>();
 interface LocalResponse {
     status: number;
     headers: any;
@@ -166,6 +167,11 @@ io.on('connection', (socket) => {
     socket.on("update-chaos", (data: { subdomain: string, type: 'none' | 'slow' | 'flaky', value: number }) => {
         chaosSettings.set(data.subdomain, { type: data.type, value: data.value });
         io.to(`dashboard-${data.subdomain}`).emit("chaos-updated", data);
+    });
+    socket.on("update-rules", (data: { subdomain: string, script: string }) => {
+        trafficRules.set(data.subdomain, data.script);
+
+        io.to(`dashboard-${data.subdomain}`).emit("rules-updated", data.script);
     });
     socket.on("disconnect", async () => {
         const subdomain = socket.data.subdomain;

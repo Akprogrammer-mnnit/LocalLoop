@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { io, interceptionActive, pendingInterceptions, chaosSettings } from "../app";
+import { io, interceptionActive, pendingInterceptions, chaosSettings, trafficRules } from "../app";
 import { RequestLog } from "../models/requestLogs.model";
 import { Tunnel } from "../models/tunnel.model";
 import crypto from "crypto";
@@ -7,6 +7,8 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 import redis from "../config/redis";
 import { Mock } from "../models/MockRoute.model";
+import vm from "vm";
+
 interface ForwardRequest {
   id: string;
   method: string;
@@ -138,6 +140,38 @@ export const trafficController = asyncHandler(
         404,
         "The tunnel ID or subdomain you requested is not active."
       );
+    }
+
+
+    const userScript = trafficRules.get(finalSubdomain);
+
+    if (userScript && userScript.trim() !== "") {
+      try {
+        const sandbox = {
+          method: req.method,
+          path: finalPath || "/",
+          headers: req.headers,
+          body: req.body,
+          query: req.query,
+          log: console.log,
+          skip: false
+        };
+
+        vm.createContext(sandbox);
+        vm.runInContext(userScript, sandbox);
+
+        req.method = sandbox.method;
+        req.headers = sandbox.headers;
+        req.body = sandbox.body;
+
+        // req.query = sandbox.query;
+
+
+        // if (sandbox.skip) return res.status(200).json(sandbox.body); 
+
+      } catch (e) {
+        console.error("Traffic Rule Error:", e);
+      }
     }
 
     const payload: ForwardRequest = {
