@@ -7,7 +7,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 import redis from "../config/redis";
 import { Mock } from "../models/MockRoute.model";
-import vm from "vm";
+import ivm from "isolated-vm";
 
 interface ForwardRequest {
   id: string;
@@ -158,37 +158,65 @@ export const trafficController = asyncHandler(
       );
     }
 
-
     const userScript = trafficRules.get(finalSubdomain);
 
     if (userScript && userScript.trim() !== "") {
       try {
-        const sandbox = {
+        console.log("🔹 [DEBUG] Body BEFORE VM:", JSON.stringify(req.body));
+        const isolate = new ivm.Isolate({ memoryLimit: 8 });
+        const context = isolate.createContextSync();
+        const jail = context.global;
+
+        const safeRequestData = {
           method: req.method,
           path: finalPath || "/",
           headers: req.headers,
           body: req.body,
-          query: req.query,
-          log: console.log,
-          skip: false
+          query: req.query
         };
 
-        vm.createContext(sandbox);
-        vm.runInContext(userScript, sandbox);
+        jail.setSync("global", jail.derefInto());
+        jail.setSync("req", new ivm.ExternalCopy(safeRequestData).copyInto());
 
-        req.method = sandbox.method;
-        req.headers = sandbox.headers;
-        req.body = sandbox.body;
-
-        // req.query = sandbox.query;
+        jail.setSync("_log", new ivm.Reference((msg: string) => {
+          console.log(`[USER-SCRIPT] ${finalSubdomain}:`, msg);
+        }));
 
 
-        // if (sandbox.skip) return res.status(200).json(sandbox.body); 
 
-      } catch (e) {
-        console.error("Traffic Rule Error:", e);
+        const scriptCode = `
+          const log = function(arg) { 
+            _log.applySync(undefined, [String(arg)]); 
+          };
+          
+          (function() {
+             // --- COMPATIBILITY SHORTCUTS ---
+             // This allows you to use 'path' instead of 'req.path'
+             const method = req.method;
+             const path = req.path;
+             const headers = req.headers;
+             const body = req.body;
+             const query = req.query;
+             // -------------------------------
+
+             ${userScript}
+          })();
+        `;
+
+        const script = isolate.compileScriptSync(scriptCode);
+        script.runSync(context, { timeout: 50 });
+
+        const modifiedData = jail.getSync("req").copySync();
+        console.log("🔸 [DEBUG] Body AFTER VM:", JSON.stringify(modifiedData.body));
+        req.method = modifiedData.method;
+        req.headers = modifiedData.headers;
+        req.body = modifiedData.body;
+
+      } catch (err: any) {
+        console.error(`❌ Traffic Rule Error (${finalSubdomain}):`, err.message);
       }
     }
+
 
     const payload: ForwardRequest = {
       id: crypto.randomUUID(),
