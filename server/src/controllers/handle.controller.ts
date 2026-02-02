@@ -86,6 +86,22 @@ export const trafficController = asyncHandler(
       }
     }
 
+    const cacheKey = `cache:${finalSubdomain}:${req.method}:${finalPath}`;
+    const startTime = performance.now();
+
+    const cachedData = await redis.get(cacheKey);
+
+    if (cachedData) {
+      const result = JSON.parse(cachedData);
+
+      const duration = (performance.now() - startTime).toFixed(2);
+      const pathForLog = finalPath.startsWith("/") ? finalPath : `/${finalPath}`;
+      console.log(`[CACHE HIT] ${finalSubdomain}${pathForLog} - ${duration}ms`);
+      return res.status(result.status).set(result.headers).send(
+        result.isBinary ? Buffer.from(result.data, 'base64') : result.data
+      );
+    }
+
     const chaos = chaosSettings.get(finalSubdomain);
 
     if (chaos && chaos.type !== 'none') {
@@ -202,7 +218,7 @@ export const trafficController = asyncHandler(
       .emit(
         "incoming-request",
         payload,
-        (err: any, responses: LocalResponse) => {
+        async (err: any, responses: LocalResponse) => {
           if (err) {
             return res
               .status(504)
@@ -219,10 +235,19 @@ export const trafficController = asyncHandler(
               .json({ error: "Invalid response from CLI" });
           }
 
+          if (req.method === "GET" && response.status === 200) {
+
+            await redis.set(cacheKey, JSON.stringify(response), 'EX', 60);
+
+          }
+
           let finalData = response.data;
           if (response.isBinary) {
             finalData = Buffer.from(response.data, 'base64');
           }
+
+          const duration = (performance.now() - startTime).toFixed(2);
+          console.log(`[CACHE MISS] ${finalSubdomain}${searchPath} - ${duration}ms`);
 
           res.status(response.status).set(response.headers).send(finalData);
         }
