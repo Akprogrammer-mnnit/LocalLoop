@@ -13,7 +13,8 @@ import handleRouter from "./routes/handle.routes"
 import apiRouter from "./routes/api.route"
 import userRouter from "./routes/user.route"
 import compression from "compression"
-
+import rateLimit from "express-rate-limit";
+import { RedisStore, RedisReply } from "rate-limit-redis";
 dotenv.config()
 
 const app = express()
@@ -34,6 +35,20 @@ app.use(compression({
     level: 6,
     threshold: 1024
 }));
+
+const limiter = rateLimit({
+    store: new RedisStore({
+        sendCommand: (...args: string[]): Promise<RedisReply> =>
+            redis.call(...args as [string, ...string[]]) as Promise<RedisReply>,
+    }),
+    windowMs: 15 * 60 * 1000,
+    max: 1000,
+    message: { error: "Too many requests, please try again later." },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+app.use("/hook", limiter);
 const server = http.createServer(app)
 
 const io = new Server(server, {
