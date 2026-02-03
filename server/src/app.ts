@@ -40,6 +40,7 @@ export const pendingInterceptions = new Map<string, {
 export const interceptionActive = new Map<string, boolean>();
 export const chaosSettings = new Map<string, { type: 'none' | 'slow' | 'flaky', value: number }>()
 export const trafficRules = new Map<string, string>();
+export const offlineQueue = new Map<string, Array<(socketId: string) => void>>();
 interface LocalResponse {
     status: number;
     headers: any;
@@ -62,6 +63,7 @@ io.on('connection', (socket) => {
     console.log(`New Connection ${socket.id}`)
 
     socket.on('register', async (data: { subdomain: string, auth?: string } | string) => {
+
         const subdomain = typeof data === 'string' ? data : data.subdomain;
         const authCredentials = typeof data === 'object' ? data.auth : null;
 
@@ -95,6 +97,12 @@ io.on('connection', (socket) => {
 
                 console.log(`Registered: ${process.env.PROXY_HOST}/hook/${subdomain} -> Socket ${socket.id}`);
                 socket.emit("registered", { url: `${process.env.PROXY_HOST}/hook/${subdomain}/` });
+                const pendingRequests = offlineQueue.get(subdomain);
+                if (pendingRequests && pendingRequests.length > 0) {
+                    console.log(`🚀 Flushing ${pendingRequests.length} queued requests for ${subdomain}`);
+                    pendingRequests.forEach((resolveFn) => resolveFn(socket.id));
+                    offlineQueue.delete(subdomain);
+                }
 
             } catch (err) {
                 console.error("Tunnel Registration Error:", err);

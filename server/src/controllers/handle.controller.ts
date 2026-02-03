@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { io, interceptionActive, pendingInterceptions, chaosSettings, trafficRules } from "../app";
+import { io, interceptionActive, pendingInterceptions, chaosSettings, trafficRules, offlineQueue } from "../app";
 import { RequestLog } from "../models/requestLogs.model";
 import { Tunnel } from "../models/tunnel.model";
 import crypto from "crypto";
@@ -152,11 +152,45 @@ export const trafficController = asyncHandler(
     }
 
     if (!socketId) {
-      throw new ApiError(
-        404,
-        "The tunnel ID or subdomain you requested is not active."
-      );
+      if (!finalSubdomain || finalSubdomain === "") {
+        finalSubdomain = part1;
+        finalPath = rest;
+      }
+      console.log(`⏳ User ${finalSubdomain} is offline. Queueing request...`);
+
+      try {
+
+        socketId = await new Promise<string>((resolve, reject) => {
+
+          const timeout = setTimeout(() => {
+
+            const currentQueue = offlineQueue.get(finalSubdomain) || [];
+            const newQueue = currentQueue.filter(fn => fn !== onReconnect);
+            if (newQueue.length === 0) offlineQueue.delete(finalSubdomain);
+            else offlineQueue.set(finalSubdomain, newQueue);
+
+            reject(new ApiError(504, "Tunnel is offline and did not reconnect in time."));
+          }, 20000);
+
+
+          const onReconnect = (newSocketId: string) => {
+            clearTimeout(timeout);
+            resolve(newSocketId);
+          };
+
+
+          const existing = offlineQueue.get(finalSubdomain) || [];
+          existing.push(onReconnect);
+          offlineQueue.set(finalSubdomain, existing);
+        });
+
+        console.log(`✅ User ${finalSubdomain} reconnected! Forwarding request...`);
+
+      } catch (err) {
+        throw err;
+      }
     }
+
 
     const userScript = trafficRules.get(finalSubdomain);
 
