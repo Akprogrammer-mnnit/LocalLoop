@@ -190,15 +190,12 @@ export const trafficController = asyncHandler(
           };
           
           (function() {
-             // --- COMPATIBILITY SHORTCUTS ---
-             // This allows you to use 'path' instead of 'req.path'
-             const method = req.method;
-             const path = req.path;
-             const headers = req.headers;
-             const body = req.body;
-             const query = req.query;
-             // -------------------------------
-
+             let method = req.method;
+             let path = req.path;
+             let headers = req.headers;
+             let body = req.body;
+             let query = req.query;
+            
              ${userScript}
           })();
         `;
