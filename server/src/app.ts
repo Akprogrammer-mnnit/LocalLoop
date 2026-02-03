@@ -12,16 +12,28 @@ import redis from "./config/redis"
 import handleRouter from "./routes/handle.routes"
 import apiRouter from "./routes/api.route"
 import userRouter from "./routes/user.route"
+import compression from "compression"
 
 dotenv.config()
 
 const app = express()
+
 app.use(cors({
     origin: process.env.ORIGIN,
     credentials: true
 }))
 app.use(express.json())
 app.use(cookieParser())
+app.use(compression({
+    filter: (req, res) => {
+        if (req.headers['x-no-compression']) {
+            return false;
+        }
+        return compression.filter(req, res);
+    },
+    level: 6,
+    threshold: 1024
+}));
 const server = http.createServer(app)
 
 const io = new Server(server, {
