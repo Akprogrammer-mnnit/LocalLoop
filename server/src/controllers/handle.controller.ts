@@ -295,9 +295,21 @@ export const trafficController = asyncHandler(
           }
 
           if (req.method === "GET" && response.status === 200) {
+            const cacheControl = response.headers['cache-control'] || response.headers['Cache-Control'];
 
-            await redis.set(cacheKey, JSON.stringify(response), 'EX', 60);
+            if (cacheControl) {
 
+              const maxAgeMatch = cacheControl.match(/max-age=(\d+)/);
+
+              if (maxAgeMatch && !cacheControl.includes('no-store') && !cacheControl.includes('no-cache')) {
+                const ttl = parseInt(maxAgeMatch[1], 10);
+
+                if (ttl > 0) {
+
+                  await redis.set(cacheKey, JSON.stringify(response), 'EX', ttl);
+                }
+              }
+            }
           }
 
           let finalData = response.data;
