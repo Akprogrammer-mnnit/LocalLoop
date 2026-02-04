@@ -16,7 +16,7 @@ const RequestLogSchema = new Schema<IRequestLog>(
   {
     owner: {
       type: Schema.Types.ObjectId,
-      ref: "User", 
+      ref: "User",
       required: true,
     },
     subdomain: {
@@ -32,10 +32,10 @@ const RequestLogSchema = new Schema<IRequestLog>(
       required: true,
     },
     headers: {
-      type: Object, 
+      type: Object,
     },
     body: {
-      type: Object, 
+      type: Object,
     },
     query: {
       type: Object,
@@ -53,5 +53,17 @@ const RequestLogSchema = new Schema<IRequestLog>(
   },
   { timestamps: true }
 );
+
+RequestLogSchema.index({ subdomain: 1, createdAt: -1 });
+RequestLogSchema.index({ owner: 1 });
+RequestLogSchema.pre('save', function () {
+  const bodySize = JSON.stringify(this.body).length;
+  if (bodySize > 10000) {
+    this.body = {
+      message: "Payload too large to log",
+      preview: JSON.stringify(this.body).substring(0, 100) + "..."
+    };
+  }
+});
 
 export const RequestLog = mongoose.model<IRequestLog>("RequestLog", RequestLogSchema);
