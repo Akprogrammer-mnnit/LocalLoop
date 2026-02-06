@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { AuthRequest } from "../types/auth.request";
 import { asyncHandler } from "../utils/asyncHandler";
 import { ApiError } from "../utils/ApiError";
-
+import jwt from "jsonwebtoken";
 const generateTokens = (user: IUserDocument) => {
   const accesstoken = user.generateAccessToken();
   const refreshtoken = user.generateRefreshToken();
@@ -153,5 +153,71 @@ export const getCurrentUser = asyncHandler(
         createdAt: req.user.createdAt,
       },
     });
+  }
+);
+
+
+export const refreshAccessToken = asyncHandler(
+  async (req: Request, res: Response) => {
+    const incomingRefreshToken = req.cookies.refreshtoken || req.body.refreshToken;
+
+    if (!incomingRefreshToken) {
+      throw new ApiError(401, "Unauthorized request");
+    }
+
+    try {
+      const decoded = jwt.verify(
+        incomingRefreshToken,
+        process.env.REFRESH_TOKEN_SECRET!
+      ) as { _id: string };
+
+      const hashedRefreshToken = crypto
+        .createHash("sha256")
+        .update(incomingRefreshToken)
+        .digest("hex");
+
+      const user = await User.findOne({
+        _id: decoded._id,
+        refreshToken: hashedRefreshToken
+      });
+
+      if (!user) {
+        throw new ApiError(401, "Invalid Refresh Token");
+      }
+
+
+      const { accesstoken, refreshtoken: newRefreshToken } = generateTokens(user);
+
+      const newHashedToken = crypto
+        .createHash("sha256")
+        .update(newRefreshToken)
+        .digest("hex");
+
+      await User.findByIdAndUpdate(user._id, {
+        refreshToken: newHashedToken
+      });
+
+      const cookieOptions = {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none" as const,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      };
+
+      return res
+        .status(200)
+        .cookie("accesstoken", accesstoken, cookieOptions)
+        .cookie("refreshtoken", newRefreshToken, cookieOptions)
+        .json({
+          message: "Access token refreshed",
+          data: {
+            accesstoken,
+            refreshtoken: newRefreshToken
+          }
+        });
+
+    } catch (error) {
+      throw new ApiError(401, "Invalid or expired refresh token");
+    }
   }
 );
