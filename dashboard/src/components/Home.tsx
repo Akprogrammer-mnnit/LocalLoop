@@ -50,7 +50,7 @@ function Home() {
     }
     else {
       try {
-        const response = await axios.get(`${import.meta.env.VITE_SERVER_URL}/api/getApi/${userData.id}`, { withCredentials: true });
+        const response = await axios.get(`${import.meta.env.VITE_SERVER_URL}/api/getApi`, { withCredentials: true });
         if (response.data) {
           setApiKey(response.data.data);
         }
