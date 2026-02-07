@@ -36,9 +36,9 @@ const program = new Command()
 program
     .version('1.0.1')
     .requiredOption('-p, --port <number>', 'Local port to forward', '3000')
-    .option('-s, --subdomain <string>', 'Desired subdomain')
+    .requiredOption('-s, --subdomain <string>', 'Desired subdomain')
     .option('-h, --host <string>', 'Proxy Server URL', process.env.PROXY_HOST || PRODUCTION_SERVER)
-    .option('-k, --key <string>', 'Your Api Key')
+    .requiredOption('-k, --key <string>', 'Your Api Key')
     .option('-a, --auth <string>', 'Basic Auth (user:password)')
     .parse(process.argv);
 

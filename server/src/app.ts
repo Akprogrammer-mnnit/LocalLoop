@@ -15,6 +15,7 @@ import userRouter from "./routes/user.route"
 import compression from "compression"
 import rateLimit from "express-rate-limit";
 import { RedisStore, RedisReply } from "rate-limit-redis";
+import jwt from "jsonwebtoken"
 dotenv.config()
 
 const app = express()
@@ -55,7 +56,8 @@ const server = http.createServer(app)
 const io = new Server(server, {
     cors: {
         origin: process.env.ORIGIN,
-        methods: ["GET", "POST"]
+        methods: ["GET", "POST"],
+        credentials: true
     }
 })
 
@@ -65,26 +67,57 @@ export const pendingInterceptions = new Map<string, {
     cliSocketId: string,
     originalPayload: any
 }>();
-export const interceptionActive = new Map<string, boolean>();
-export const chaosSettings = new Map<string, { type: 'none' | 'slow' | 'flaky', value: number }>()
-export const trafficRules = new Map<string, string>();
+
 export const offlineQueue = new Map<string, Array<(socketId: string) => void>>();
+
 interface LocalResponse {
     status: number;
     headers: any;
     data: any;
 }
 
+function parseSocketCookies(cookieString: string | undefined) {
+    if (!cookieString) return {};
+    return cookieString.split(';').reduce((cookies, item) => {
+        const [name, value] = item.split('=').map(c => c.trim());
+        cookies[name] = value;
+        return cookies;
+    }, {} as Record<string, string>);
+}
 io.use(async (socket, next) => {
-    const apiKey = socket.handshake.auth.apiKey;
-    if (apiKey) {
-        const user = await User.findOne({ apiKey });
-        if (user) {
-            socket.data.userId = user._id;
-            console.log(`🔑 Logged in: ${user.email}`);
+    try {
+        const apiKey = socket.handshake.auth.apiKey;
+        if (apiKey) {
+            const user = await User.findOne({ apiKey });
+            if (user) {
+                socket.data.userId = user._id;
+                console.log(`🔑 CLI Login: ${user.email}`);
+                return next();
+            }
         }
+
+        const cookieString = socket.handshake.headers.cookie;
+        const cookies = parseSocketCookies(cookieString);
+        const token = cookies['accesstoken'];
+
+        if (token) {
+            const decoded = jwt.verify(
+                token,
+                process.env.ACCESS_TOKEN_SECRET || process.env.JWT_SECRET || "hafuihewauigthwriaghirawgorwabgowr"
+            ) as any;
+
+            if (decoded && decoded._id) {
+                socket.data.userId = decoded._id;
+                console.log(`🍪 Dashboard Login: ${decoded._id}`);
+                return next();
+            }
+        }
+        next();
+
+    } catch (error) {
+        console.error("Socket Auth Error:", error);
+        next();
     }
-    next();
 })
 
 io.on('connection', (socket) => {
@@ -92,73 +125,75 @@ io.on('connection', (socket) => {
 
     socket.on('register', async (data: { subdomain: string, auth?: string } | string) => {
 
+        if (!socket.data.userId) {
+            socket.emit("error", { message: "Authentication Required. Please provide a valid API Key." });
+            return;
+        }
+
         const subdomain = typeof data === 'string' ? data : data.subdomain;
         const isValidSubdomain = /^[a-z0-9-]+$/.test(subdomain);
+
         if (!isValidSubdomain || subdomain.length > 63 || subdomain.length < 3) {
             socket.emit("error", { message: "Invalid subdomain. Use 3-63 characters (a-z, 0-9, -)" });
             return;
         }
+
         const authCredentials = typeof data === 'object' ? data.auth : null;
 
-        if (socket.data.userId) {
-            try {
-                const existingTunnel = await Tunnel.findOne({ subdomain });
+        try {
 
-                if (existingTunnel) {
-                    if (existingTunnel.owner.toString() !== socket.data.userId.toString()) {
-                        socket.emit("error", { message: "Subdomain is taken by another user." });
-                        return;
-                    }
-                    await Tunnel.updateOne({ subdomain }, { isActive: true });
-                } else {
+            let tunnel = await Tunnel.findOne({ subdomain });
+
+            if (tunnel) {
+                if (tunnel.owner.toString() !== socket.data.userId.toString()) {
+                    socket.emit("error", { message: "Subdomain is taken by another user." });
+                    return;
+                }
+                await Tunnel.updateOne({ subdomain }, { isActive: true });
+            } else {
+                try {
                     await Tunnel.create({
                         subdomain: subdomain,
                         owner: socket.data.userId,
                         isActive: true
                     });
+                } catch (err: any) {
+                    if (err.code === 11000) {
+                        socket.emit("error", { message: "Subdomain is taken by another user." });
+                        return;
+                    }
+                    throw err;
                 }
-
-                await redis.set(`tunnel:${subdomain}`, socket.id);
-                await redis.expire(`tunnel:${subdomain}`, 60);
-
-                if (authCredentials) {
-                    await redis.set(`auth:${subdomain}`, authCredentials);
-                    await redis.expire(`auth:${subdomain}`, 60);
-                }
-
-                socket.data.subdomain = subdomain;
-
-                console.log(`Registered: ${process.env.PROXY_HOST}/hook/${subdomain} -> Socket ${socket.id}`);
-                socket.emit("registered", { url: `${process.env.PROXY_HOST}/hook/${subdomain}/` });
-                const pendingRequests = offlineQueue.get(subdomain);
-                if (pendingRequests && pendingRequests.length > 0) {
-                    console.log(`🚀 Flushing ${pendingRequests.length} queued requests for ${subdomain}`);
-                    pendingRequests.forEach((resolveFn) => resolveFn(socket.id));
-                    offlineQueue.delete(subdomain);
-                }
-
-            } catch (err) {
-                console.error("Tunnel Registration Error:", err);
-                socket.emit("error", { message: "Server error during registration" });
             }
-        }
-        else {
-            const token = crypto.randomBytes(32).toString("hex");
-            const fullSubdomain = `${token}/${subdomain}`;
 
-            await redis.set(`tunnel:${fullSubdomain}`, socket.id);
-            await redis.expire(`tunnel:${fullSubdomain}`, 60);
+
+            await redis.set(`tunnel:${subdomain}`, socket.id);
+            await redis.expire(`tunnel:${subdomain}`, 60);
 
             if (authCredentials) {
-                await redis.set(`auth:${fullSubdomain}`, authCredentials);
-                await redis.expire(`auth:${fullSubdomain}`, 60);
+                await redis.set(`auth:${subdomain}`, authCredentials);
+                await redis.expire(`auth:${subdomain}`, 60);
             }
 
-            socket.data.subdomain = fullSubdomain;
+            socket.data.subdomain = subdomain;
 
-            socket.emit("registered", { url: `${process.env.PROXY_HOST}/hook/${token}/${subdomain}/` });
+            console.log(`Registered: ${process.env.PROXY_HOST}/hook/${subdomain} -> Socket ${socket.id}`);
+
+            socket.emit("registered", { url: `${process.env.PROXY_HOST}/hook/${subdomain}/` });
+
+            const pendingRequests = offlineQueue.get(subdomain);
+            if (pendingRequests && pendingRequests.length > 0) {
+                console.log(`🚀 Flushing ${pendingRequests.length} queued requests for ${subdomain}`);
+                pendingRequests.forEach((resolveFn) => resolveFn(socket.id));
+                offlineQueue.delete(subdomain);
+            }
+
+        } catch (err) {
+            console.error("Tunnel Registration Error:", err);
+            socket.emit("error", { message: "Server error during registration" });
         }
-    })
+    });
+
 
     socket.on('heartbeat', async (data: { subdomain: string }) => {
         const storedSocketId = await redis.get(`tunnel:${data.subdomain}`);
@@ -217,20 +252,25 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on("toggle-interception", (data: { subdomain: string, active: boolean }) => {
-        interceptionActive.set(data.subdomain, data.active);
+
+    socket.on("toggle-interception", async (data: { subdomain: string, active: boolean }) => {
+
+        await redis.set(`interception:${data.subdomain}`, String(data.active));
         io.to(`dashboard-${data.subdomain}`).emit("interception-status", data.active);
     });
 
-    socket.on("update-chaos", (data: { subdomain: string, type: 'none' | 'slow' | 'flaky', value: number }) => {
-        chaosSettings.set(data.subdomain, { type: data.type, value: data.value });
+    socket.on("update-chaos", async (data: { subdomain: string, type: 'none' | 'slow' | 'flaky', value: number }) => {
+
+        await redis.set(`chaos:${data.subdomain}`, JSON.stringify({ type: data.type, value: data.value }));
         io.to(`dashboard-${data.subdomain}`).emit("chaos-updated", data);
     });
-    socket.on("update-rules", (data: { subdomain: string, script: string }) => {
-        trafficRules.set(data.subdomain, data.script);
 
+    socket.on("update-rules", async (data: { subdomain: string, script: string }) => {
+
+        await redis.set(`rules:${data.subdomain}`, data.script);
         io.to(`dashboard-${data.subdomain}`).emit("rules-updated", data.script);
     });
+
     socket.on("disconnect", async () => {
         const subdomain = socket.data.subdomain;
 

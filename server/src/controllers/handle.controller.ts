@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { io, interceptionActive, pendingInterceptions, chaosSettings, trafficRules, offlineQueue } from "../app";
+import { io, pendingInterceptions, offlineQueue } from "../app";
 import { RequestLog } from "../models/requestLogs.model";
 import { Tunnel } from "../models/tunnel.model";
 import crypto from "crypto";
@@ -65,22 +65,25 @@ export const trafficController = asyncHandler(
     const requiredAuth = await redis.get(`auth:${finalSubdomain}`);
 
     if (requiredAuth) {
-
       const authHeader = req.headers.authorization || '';
       const [type, credentials] = authHeader.split(' ');
 
       let isAuthenticated = false;
 
       if (type === 'Basic' && credentials) {
-
         const userPass = Buffer.from(credentials, 'base64').toString();
-        if (userPass === requiredAuth) {
+
+
+        const bufferUserPass = Buffer.from(userPass);
+        const bufferRequired = Buffer.from(requiredAuth);
+
+        if (bufferUserPass.length === bufferRequired.length &&
+          crypto.timingSafeEqual(bufferUserPass, bufferRequired)) {
           isAuthenticated = true;
         }
       }
 
       if (!isAuthenticated) {
-
         res.set('WWW-Authenticate', `Basic realm="Restricted Area: ${finalSubdomain}"`);
         return res.status(401).send('Authentication required.');
       }
@@ -102,7 +105,8 @@ export const trafficController = asyncHandler(
       );
     }
 
-    const chaos = chaosSettings.get(finalSubdomain);
+    const chaosRaw = await redis.get(`chaos:${finalSubdomain}`);
+    const chaos = chaosRaw ? JSON.parse(chaosRaw) : null;
 
     if (chaos && chaos.type !== 'none') {
       if (chaos.type == 'slow') {
@@ -191,8 +195,7 @@ export const trafficController = asyncHandler(
       }
     }
 
-
-    const userScript = trafficRules.get(finalSubdomain);
+    const userScript = await redis.get(`rules:${finalSubdomain}`);
 
     if (userScript && userScript.trim() !== "") {
       try {
@@ -215,8 +218,6 @@ export const trafficController = asyncHandler(
         jail.setSync("_log", new ivm.Reference((msg: string) => {
           console.log(`[USER-SCRIPT] ${finalSubdomain}:`, msg);
         }));
-
-
 
         const scriptCode = `
           const log = function(arg) { 
@@ -259,7 +260,9 @@ export const trafficController = asyncHandler(
       timestamp: Date.now(),
     };
 
-    if (interceptionActive.get(finalSubdomain)) {
+    const isInterceptionActive = await redis.get(`interception:${finalSubdomain}`) === 'true';
+
+    if (isInterceptionActive) {
       pendingInterceptions.set(payload.id, {
         res,
         cliSocketId: socketId,
@@ -324,26 +327,24 @@ export const trafficController = asyncHandler(
         }
       );
 
-    const socket = io.sockets.sockets.get(socketId);
-    const tunnel = await Tunnel.findOne({ subdomain: finalSubdomain });
-    const ownerId = tunnel?.owner ?? socket?.data?.userId;
+    try {
+      const socket = io.sockets.sockets.get(socketId);
+      const tunnel = await Tunnel.findOne({ subdomain: finalSubdomain });
+      const ownerId = tunnel?.owner ?? socket?.data?.userId;
 
-    if (ownerId) {
-      await RequestLog.create({
-        owner: ownerId,
-        subdomain: finalSubdomain,
-        method: req.method,
-        path: finalPath || "/",
-        headers: req.headers,
-        body: req.body,
-        timestamp: Date.now(),
-      });
-    }
-    else {
-      const key = `history:${finalSubdomain}`
-      await redis.lpush(key, JSON.stringify(payload));
-      await redis.ltrim(key, 0, 19);
-      await redis.expire(key, 3600);
+      if (ownerId) {
+        await RequestLog.create({
+          owner: ownerId,
+          subdomain: finalSubdomain,
+          method: req.method,
+          path: finalPath || "/",
+          headers: req.headers,
+          body: req.body,
+          timestamp: Date.now(),
+        });
+      }
+    } catch (logError) {
+      console.error("⚠️ Failed to log request:", logError);
     }
   }
 );
