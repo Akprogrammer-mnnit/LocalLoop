@@ -93,6 +93,11 @@ io.on('connection', (socket) => {
     socket.on('register', async (data: { subdomain: string, auth?: string } | string) => {
 
         const subdomain = typeof data === 'string' ? data : data.subdomain;
+        const isValidSubdomain = /^[a-z0-9-]+$/.test(subdomain);
+        if (!isValidSubdomain || subdomain.length > 63 || subdomain.length < 3) {
+            socket.emit("error", { message: "Invalid subdomain. Use 3-63 characters (a-z, 0-9, -)" });
+            return;
+        }
         const authCredentials = typeof data === 'object' ? data.auth : null;
 
         if (socket.data.userId) {
@@ -163,8 +168,25 @@ io.on('connection', (socket) => {
             await redis.expire(`auth:${data.subdomain}`, 60);
         }
     });
-    socket.on('join-room', (data) => {
-        socket.join(`dashboard-${data}`);
+
+    socket.on('join-room', async (subdomain: string) => {
+
+        if (!socket.data.userId) {
+            socket.emit("error", { message: "Unauthorized" });
+            return;
+        }
+        try {
+            const tunnel = await Tunnel.findOne({ subdomain, owner: socket.data.userId });
+
+            if (tunnel) {
+                socket.join(`dashboard-${subdomain}`);
+                console.log(`Socket ${socket.id} joined room dashboard-${subdomain}`);
+            } else {
+                socket.emit("error", { message: "Access Denied: You do not own this subdomain" });
+            }
+        } catch (e) {
+            console.error("Join room error:", e);
+        }
     })
 
     socket.on("resume-request", (data: { requestId: string, modifiedBody: any, modifiedHeaders: any }) => {
