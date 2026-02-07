@@ -6,6 +6,7 @@ import { ApiError } from "../utils/ApiError";
 import { asyncHandler } from "../utils/asyncHandler";
 import redis from "../config/redis";
 import { Session } from "../models/session.model";
+
 export const getHistory = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { subdomain } = req.params;
@@ -15,21 +16,21 @@ export const getHistory = asyncHandler(
     }
 
     if (req.user?._id) {
-      const tunnel = await Tunnel.findOne({ subdomain, owner: req.user?._id });
+      const tunnel = await Tunnel.findOne({ subdomain, owner: req.user._id });
       if (!tunnel) {
-        throw new ApiError(420, "You have no such subdomain");
+        throw new ApiError(403, "You do not have access to this subdomain");
       }
+
       const userLogs = await RequestLog.find({ owner: req.user._id, subdomain }).sort({ timestamp: -1 });
       return res.status(200).json({
         success: true,
         source: "database",
         data: userLogs,
-      })
+      });
     }
 
     const redisKey = `history:${subdomain}`;
     const rawLogs = await redis.lrange(redisKey, 0, -1);
-
     const guestLogs = rawLogs.map(log => JSON.parse(log));
 
     return res.status(200).json({
@@ -37,7 +38,6 @@ export const getHistory = asyncHandler(
       source: "redis",
       data: guestLogs,
     });
-
   }
 );
 
@@ -57,7 +57,6 @@ export const getMySubdomains = asyncHandler(
   }
 );
 
-
 export const saveSession = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { subdomain, name, requests } = req.body;
 
@@ -65,10 +64,17 @@ export const saveSession = asyncHandler(async (req: AuthRequest, res: Response) 
     throw new ApiError(400, "Cannot save empty session");
   }
 
-  const owner = req.user?._id;
+  if (!req.user?._id) {
+    throw new ApiError(401, "You must be logged in to save sessions");
+  }
+
+  const tunnel = await Tunnel.findOne({ subdomain, owner: req.user._id });
+  if (!tunnel) {
+    throw new ApiError(403, "You cannot save sessions for a subdomain you do not own");
+  }
 
   const session = await Session.create({
-    owner,
+    owner: req.user._id,
     subdomain,
     name,
     requests
@@ -79,12 +85,26 @@ export const saveSession = asyncHandler(async (req: AuthRequest, res: Response) 
 
 export const getSessions = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { subdomain } = req.params;
-  const sessions = await Session.find({ subdomain }).sort({ createdAt: -1 });
+
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized");
+  }
+  const sessions = await Session.find({ subdomain, owner: req.user._id }).sort({ createdAt: -1 });
+
   res.status(200).json({ data: sessions });
 });
 
 export const deleteSession = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  await Session.findByIdAndDelete(id);
+
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized");
+  }
+  const deletedSession = await Session.findOneAndDelete({ _id: id, owner: req.user._id });
+
+  if (!deletedSession) {
+    throw new ApiError(404, "Session not found or you do not have permission to delete it");
+  }
+
   res.status(200).json({ success: true });
 });

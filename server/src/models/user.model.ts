@@ -4,11 +4,13 @@ import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 
 dotenv.config();
+if (!process.env.ACCESS_TOKEN_SECRET) throw new Error("FATAL: ACCESS_TOKEN_SECRET is missing");
+if (!process.env.REFRESH_TOKEN_SECRET) throw new Error("FATAL: REFRESH_TOKEN_SECRET is missing");
 
-const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET!;
-const ACCESS_TOKEN_EXPIRY = process.env.ACCESS_TOKEN_EXPIRY!;
-const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET!;
-const REFRESH_TOKEN_EXPIRY = process.env.REFRESH_TOKEN_EXPIRY!;
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
+const ACCESS_TOKEN_EXPIRY = process.env.ACCESS_TOKEN_EXPIRY || "15m";
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
+const REFRESH_TOKEN_EXPIRY = process.env.REFRESH_TOKEN_EXPIRY || "7d";
 
 export interface IUserDocument extends Document {
   email: string;
@@ -43,7 +45,7 @@ const userSchema = new mongoose.Schema<IUserDocument>(
     apiKey: {
       type: String,
       select: false,
-      required:true
+      required: true
     }
   },
   { timestamps: true }
@@ -77,7 +79,7 @@ userSchema.methods.generateRefreshToken = function (): string {
 };
 
 userSchema.set("toJSON", {
-  transform(_: any, ret:any) {
+  transform(_: any, ret: any) {
     delete ret.password;
     delete ret.refreshToken;
     delete ret.__v;
