@@ -48,34 +48,30 @@ function Dashboard() {
   const [editedStatus, setEditedStatus] = useState(200);
   const [editedHeaders, setEditedHeaders] = useState<Record<string, string>>({});
   const [activeEditorTab, setActiveEditorTab] = useState<'body' | 'headers'>('body');
-
-  const { token, SUBDOMAIN } = useParams();
-  const secureId = token ? `${token}/${SUBDOMAIN}` : SUBDOMAIN;
   const [socket, setSocket] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'requests' | 'mocks' | 'chaos' | 'recorder' | 'rules'>('requests');
+
+  const { SUBDOMAIN } = useParams();
+  const secureId = SUBDOMAIN;
 
   useEffect(() => {
     const getHistory = async () => {
       try {
-        let url;
-        if (token) {
-          url = `${SERVER_URL}/api/guest/history/${encodeURIComponent(secureId!)}`;
-        }
-        else {
-          url = `${SERVER_URL}/api/history/${SUBDOMAIN}`;
-        }
-
+        const url = `${SERVER_URL}/api/history/${SUBDOMAIN}`;
         const res = await axios.get(url, { withCredentials: true });
         setRequests(res.data.data);
-
       } catch (e) {
         console.error("Failed to fetch history", e);
       }
     }
 
-    getHistory();
+    if (SUBDOMAIN) {
+      getHistory();
+    }
 
-    const newSocket = io(SERVER_URL);
+    const newSocket = io(SERVER_URL, {
+      withCredentials: true
+    });
     setSocket(newSocket);
 
     newSocket.on('connect', () => {
@@ -101,7 +97,7 @@ function Dashboard() {
     newSocket.emit('join-room', secureId);
 
     return () => { newSocket.disconnect(); };
-  }, [SUBDOMAIN, token, secureId]);
+  }, [SUBDOMAIN, secureId]);
 
   const handleReplay = async (req: RequestLog) => {
     try {

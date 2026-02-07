@@ -56,13 +56,16 @@ const RequestLogSchema = new Schema<IRequestLog>(
 
 RequestLogSchema.index({ subdomain: 1, createdAt: -1 });
 RequestLogSchema.index({ owner: 1 });
-RequestLogSchema.pre('save', function () {
-  const bodySize = JSON.stringify(this.body).length;
-  if (bodySize > 10000) {
-    this.body = {
-      message: "Payload too large to log",
-      preview: JSON.stringify(this.body).substring(0, 100) + "..."
-    };
+
+RequestLogSchema.pre('save', function (next) {
+  if (this.body) {
+    const stringBody = JSON.stringify(this.body);
+    if (stringBody && stringBody.length > 10000) {
+      this.body = {
+        message: "Payload too large to log",
+        preview: stringBody.substring(0, 100) + "..."
+      };
+    }
   }
 });
 
