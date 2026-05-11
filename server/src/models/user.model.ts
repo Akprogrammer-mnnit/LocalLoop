@@ -24,6 +24,7 @@ export interface IUserDocument extends Document {
   generateRefreshToken(): string;
 }
 
+
 const userSchema = new mongoose.Schema<IUserDocument>(
   {
     email: {
@@ -51,6 +52,8 @@ const userSchema = new mongoose.Schema<IUserDocument>(
   { timestamps: true }
 );
 
+userSchema.index({ email: 1 });
+userSchema.index({ apiKey: 1 });
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
   this.password = await bcrypt.hash(this.password, 10);

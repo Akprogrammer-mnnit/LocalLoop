@@ -1,11 +1,11 @@
 import mongoose, { Schema } from "mongoose";
 
 export interface ITunnel extends Document {
-  subdomain: string;
-  owner: mongoose.Types.ObjectId;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+    subdomain: string;
+    owner: mongoose.Types.ObjectId;
+    isActive: boolean;
+    createdAt: Date;
+    updatedAt: Date;
 }
 
 const tunnelSchema = new mongoose.Schema<ITunnel>({
@@ -25,6 +25,7 @@ const tunnelSchema = new mongoose.Schema<ITunnel>({
         type: Boolean,
         default: false
     }
-},{timestamps: true})
+}, { timestamps: true })
 
+tunnelSchema.index({ subdomain: 1 });
 export const Tunnel = mongoose.model<ITunnel>("Tunnel", tunnelSchema);

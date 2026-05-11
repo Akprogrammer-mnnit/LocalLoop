@@ -1,8 +1,8 @@
 import axios from 'axios'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../store/store'
-import { Link } from "react-router-dom"
-import { Key, Globe, Calendar, ExternalLink } from 'lucide-react'
+import { Link, useNavigate } from "react-router-dom"
+import { Key, Globe, Calendar, ExternalLink, LogOut } from 'lucide-react'
 
 interface Tunnel {
   _id: string;
@@ -13,6 +13,8 @@ interface Tunnel {
 
 function Home() {
   const userData = useAuthStore((s => s.user));
+  const logout = useAuthStore(s => s.logout);
+  const navigate = useNavigate();
   const [apiKey, setApiKey] = useState<string>("");
   const [show, setShow] = useState<boolean>(false);
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
@@ -61,11 +63,21 @@ function Home() {
     setShow(prev => !prev);
   };
 
+  const handleLogout = async () => {
+    try {
+      await axios.post(`${import.meta.env.VITE_SERVER_URL}/api/logout`, {}, { withCredentials: true });
+    } catch (e) {
+      console.error("Logout failed on server", e);
+    } finally {
+      logout();
+      navigate('/login');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-        {/* Header Section */}
         <div className="md:flex md:items-center md:justify-between mb-8">
           <div className="flex-1 min-w-0">
             <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
@@ -75,9 +87,18 @@ function Home() {
               Manage your local tunnels and API configurations.
             </p>
           </div>
+
+          <div className="mt-4 flex md:mt-0 md:ml-4">
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+            >
+              <LogOut className="h-4 w-4 text-gray-500" />
+              Sign Out
+            </button>
+          </div>
         </div>
 
-        {/* API Key Card */}
         <div className="bg-white overflow-hidden shadow rounded-lg mb-8 border border-gray-200">
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center gap-2">
@@ -109,7 +130,6 @@ function Home() {
           </div>
         </div>
 
-        {/* Tunnels List Card */}
         <div className="bg-white shadow rounded-lg overflow-hidden border border-gray-200">
           <div className="px-4 py-5 border-b border-gray-200 sm:px-6 flex justify-between items-center">
             <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center gap-2">

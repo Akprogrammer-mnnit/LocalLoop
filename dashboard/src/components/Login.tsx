@@ -29,7 +29,6 @@ function Login() {
       setUser(response.data.data);
       navigate("/");
     } catch (err: any) {
-      console.log(err);
       setError(
         err.response?.data?.message || "Login failed"
       );

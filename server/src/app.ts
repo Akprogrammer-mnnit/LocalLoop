@@ -24,7 +24,8 @@ app.use(cors({
     origin: process.env.ORIGIN,
     credentials: true
 }))
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser())
 app.set('trust proxy', 1);
 app.use(compression({
@@ -58,14 +59,15 @@ const io = new Server(server, {
         origin: process.env.ORIGIN,
         methods: ["GET", "POST"],
         credentials: true
-    }
+    },
+    maxHttpBufferSize: 5e7
 })
-
 
 export const pendingInterceptions = new Map<string, {
     res: any,
     cliSocketId: string,
-    originalPayload: any
+    originalPayload: any,
+    timeoutId: NodeJS.Timeout
 }>();
 
 export const offlineQueue = new Map<string, Array<(socketId: string) => void>>();
@@ -79,11 +81,16 @@ interface LocalResponse {
 function parseSocketCookies(cookieString: string | undefined) {
     if (!cookieString) return {};
     return cookieString.split(';').reduce((cookies, item) => {
-        const [name, value] = item.split('=').map(c => c.trim());
-        cookies[name] = value;
+        const splitIndex = item.indexOf('=');
+        if (splitIndex !== -1) {
+            const name = item.substring(0, splitIndex).trim();
+            const value = item.substring(splitIndex + 1).trim();
+            cookies[name] = value;
+        }
         return cookies;
     }, {} as Record<string, string>);
 }
+
 io.use(async (socket, next) => {
     try {
         const apiKey = socket.handshake.auth.apiKey;
@@ -112,11 +119,11 @@ io.use(async (socket, next) => {
                 return next();
             }
         }
-        next();
+        next(new Error("Authentication Required. Please provide a valid API Key or Access Token."));
 
     } catch (error) {
         console.error("Socket Auth Error:", error);
-        next();
+        next(new Error("Authentication Required. Please provide a valid API Key or Access Token."));
     }
 })
 
@@ -166,7 +173,6 @@ io.on('connection', (socket) => {
                 }
             }
 
-
             await redis.set(`tunnel:${subdomain}`, socket.id);
             await redis.expire(`tunnel:${subdomain}`, 60);
 
@@ -194,13 +200,12 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('heartbeat', async () => {
+        const subdomain = socket.data.subdomain;
 
-    socket.on('heartbeat', async (data: { subdomain: string }) => {
-        const storedSocketId = await redis.get(`tunnel:${data.subdomain}`);
-
-        if (storedSocketId === socket.id) {
-            await redis.expire(`tunnel:${data.subdomain}`, 60);
-            await redis.expire(`auth:${data.subdomain}`, 60);
+        if (subdomain) {
+            await redis.expire(`tunnel:${subdomain}`, 60);
+            await redis.expire(`auth:${subdomain}`, 60);
         }
     });
 
@@ -228,6 +233,7 @@ io.on('connection', (socket) => {
         const pending = pendingInterceptions.get(data.requestId);
 
         if (pending) {
+            clearTimeout(pending.timeoutId);
             const { cliSocketId, originalPayload, res } = pending;
 
             const finalPayload = {
@@ -251,7 +257,6 @@ io.on('connection', (socket) => {
             pendingInterceptions.delete(data.requestId);
         }
     });
-
 
     socket.on("toggle-interception", async (data: { subdomain: string, active: boolean }) => {
 
@@ -278,6 +283,8 @@ io.on('connection', (socket) => {
             const storedSocketId = await redis.get(`tunnel:${subdomain}`);
 
             if (storedSocketId === socket.id) {
+                await redis.del(`tunnel:${subdomain}`);
+                await redis.del(`auth:${subdomain}`);
                 await redis.del(`tunnel:${subdomain}`);
 
                 if (socket.data.userId) {

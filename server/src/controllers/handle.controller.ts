@@ -31,6 +31,7 @@ export const trafficController = asyncHandler(
     const { part1 } = req.params;
     const rawRest = req.params.rest;
     let rest = "";
+
     if (Array.isArray(rawRest)) {
       rest = rawRest.join("/");
     } else if (typeof rawRest === "string") {
@@ -38,47 +39,46 @@ export const trafficController = asyncHandler(
     }
 
     let socketId: string | null = null;
-    let finalSubdomain = "";
-    let finalPath = "";
+    let finalSubdomain = part1;
+    let finalPath = rest;
 
-    const directTunnelId = await redis.get(`tunnel:${part1}`);
+    const directTunnelId = await redis.get(`tunnel:${finalSubdomain}`);
 
     if (directTunnelId) {
       socketId = directTunnelId;
-      finalSubdomain = part1;
-      finalPath = rest;
-    } else if (rest) {
-      const parts = rest.split("/");
-      const possibleSubdomain = parts[0];
-      const key = `${part1}/${possibleSubdomain}`;
-
-      const nestedTunnelId = await redis.get(`tunnel:${key}`);
-
-      if (nestedTunnelId) {
-        socketId = nestedTunnelId;
-        finalSubdomain = key;
-        finalPath = parts.slice(1).join("/");
-      }
     }
 
+    const searchPath = finalPath.startsWith("/") ? finalPath : `/${finalPath}`;
+    const cacheKey = `cache:${finalSubdomain}:${req.method}:${finalPath}`;
+    const startTime = performance.now();
 
-    const requiredAuth = await redis.get(`auth:${finalSubdomain}`);
+    const [
+      requiredAuth,
+      cachedData,
+      chaosRaw,
+      userScript,
+      isInterceptionStr,
+      mockRule
+    ] = await Promise.all([
+      redis.get(`auth:${finalSubdomain}`),
+      redis.get(cacheKey),
+      redis.get(`chaos:${finalSubdomain}`),
+      redis.get(`rules:${finalSubdomain}`),
+      redis.get(`interception:${finalSubdomain}`),
+      Mock.findOne({ subdomain: finalSubdomain, method: req.method, path: searchPath })
+    ]);
 
     if (requiredAuth) {
       const authHeader = req.headers.authorization || '';
       const [type, credentials] = authHeader.split(' ');
-
       let isAuthenticated = false;
 
       if (type === 'Basic' && credentials) {
         const userPass = Buffer.from(credentials, 'base64').toString();
-
-
         const bufferUserPass = Buffer.from(userPass);
         const bufferRequired = Buffer.from(requiredAuth);
 
-        if (bufferUserPass.length === bufferRequired.length &&
-          crypto.timingSafeEqual(bufferUserPass, bufferRequired)) {
+        if (bufferUserPass.length === bufferRequired.length && crypto.timingSafeEqual(bufferUserPass, bufferRequired)) {
           isAuthenticated = true;
         }
       }
@@ -89,35 +89,22 @@ export const trafficController = asyncHandler(
       }
     }
 
-    const cacheKey = `cache:${finalSubdomain}:${req.method}:${finalPath}`;
-    const startTime = performance.now();
-
-    const cachedData = await redis.get(cacheKey);
-
     if (cachedData) {
       const result = JSON.parse(cachedData);
-
-      const duration = (performance.now() - startTime).toFixed(2);
-      const pathForLog = finalPath.startsWith("/") ? finalPath : `/${finalPath}`;
-      console.log(`[CACHE HIT] ${finalSubdomain}${pathForLog} - ${duration}ms`);
       return res.status(result.status).set(result.headers).send(
         result.isBinary ? Buffer.from(result.data, 'base64') : result.data
       );
     }
 
-    const chaosRaw = await redis.get(`chaos:${finalSubdomain}`);
-    const chaos = chaosRaw ? JSON.parse(chaosRaw) : null;
-
-    if (chaos && chaos.type !== 'none') {
-      if (chaos.type == 'slow') {
+    if (chaosRaw) {
+      const chaos = JSON.parse(chaosRaw);
+      if (chaos.type === 'slow') {
         await new Promise(resolve => setTimeout(resolve, chaos.value));
-      }
-      else if (chaos.type == 'flaky') {
+      } else if (chaos.type === 'flaky') {
         const shouldFail = Math.random() * 100 < chaos.value;
-
         if (shouldFail) {
           io.to(`dashboard-${finalSubdomain}`).emit("new-request", {
-            id: "CHAOS-" + Date.now(),
+            id: "CHAOS-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
             method: req.method,
             path: finalPath || "/",
             headers: req.headers,
@@ -131,17 +118,9 @@ export const trafficController = asyncHandler(
       }
     }
 
-    const searchPath = finalPath.startsWith("/") ? finalPath : `/${finalPath}`;
-
-    const mockRule = await Mock.findOne({
-      subdomain: finalSubdomain,
-      method: req.method,
-      path: searchPath
-    });
     if (mockRule) {
-
       const mockPayload = {
-        id: "MOCK-" + Date.now(),
+        id: "MOCK-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
         method: req.method,
         path: finalPath || "/",
         headers: req.headers,
@@ -151,56 +130,43 @@ export const trafficController = asyncHandler(
         isMock: true
       };
       io.to(`dashboard-${finalSubdomain}`).emit("new-request", mockPayload);
-
       return res.status(mockRule.status).json(JSON.parse(mockRule.body));
     }
 
     if (!socketId) {
-      if (!finalSubdomain || finalSubdomain === "") {
-        finalSubdomain = part1;
-        finalPath = rest;
-      }
-      console.log(`⏳ User ${finalSubdomain} is offline. Queueing request...`);
-
       try {
-
         socketId = await new Promise<string>((resolve, reject) => {
+          const currentQueue = offlineQueue.get(finalSubdomain) || [];
+          if (currentQueue.length >= 50) {
+            return reject(new ApiError(503, "Queue limit reached. Tunnel offline."));
+          }
 
           const timeout = setTimeout(() => {
-
-            const currentQueue = offlineQueue.get(finalSubdomain) || [];
-            const newQueue = currentQueue.filter(fn => fn !== onReconnect);
+            const currentQ = offlineQueue.get(finalSubdomain) || [];
+            const newQueue = currentQ.filter(fn => fn !== onReconnect);
             if (newQueue.length === 0) offlineQueue.delete(finalSubdomain);
             else offlineQueue.set(finalSubdomain, newQueue);
 
             reject(new ApiError(504, "Tunnel is offline and did not reconnect in time."));
           }, 20000);
 
-
           const onReconnect = (newSocketId: string) => {
             clearTimeout(timeout);
             resolve(newSocketId);
           };
 
-
-          const existing = offlineQueue.get(finalSubdomain) || [];
-          existing.push(onReconnect);
-          offlineQueue.set(finalSubdomain, existing);
+          currentQueue.push(onReconnect);
+          offlineQueue.set(finalSubdomain, currentQueue);
         });
-
-        console.log(`✅ User ${finalSubdomain} reconnected! Forwarding request...`);
-
       } catch (err) {
         throw err;
       }
     }
 
-    const userScript = await redis.get(`rules:${finalSubdomain}`);
-
     if (userScript && userScript.trim() !== "") {
+      let isolate: ivm.Isolate | null = null;
       try {
-        console.log("🔹 [DEBUG] Body BEFORE VM:", JSON.stringify(req.body));
-        const isolate = new ivm.Isolate({ memoryLimit: 8 });
+        isolate = new ivm.Isolate({ memoryLimit: 8 });
         const context = isolate.createContextSync();
         const jail = context.global;
 
@@ -216,21 +182,22 @@ export const trafficController = asyncHandler(
         jail.setSync("req", new ivm.ExternalCopy(safeRequestData).copyInto());
 
         jail.setSync("_log", new ivm.Reference((msg: string) => {
-          console.log(`[USER-SCRIPT] ${finalSubdomain}:`, msg);
+          io.to(`dashboard-${finalSubdomain}`).emit("script-log", {
+            message: msg,
+            timestamp: Date.now()
+          });
         }));
 
         const scriptCode = `
           const log = function(arg) { 
             _log.applySync(undefined, [String(arg)]); 
           };
-          
           (function() {
              let method = req.method;
              let path = req.path;
              let headers = req.headers;
              let body = req.body;
              let query = req.query;
-            
              ${userScript}
           })();
         `;
@@ -239,16 +206,18 @@ export const trafficController = asyncHandler(
         script.runSync(context, { timeout: 50 });
 
         const modifiedData = jail.getSync("req").copySync();
-        console.log("🔸 [DEBUG] Body AFTER VM:", JSON.stringify(modifiedData.body));
         req.method = modifiedData.method;
         req.headers = modifiedData.headers;
         req.body = modifiedData.body;
 
       } catch (err: any) {
         console.error(`❌ Traffic Rule Error (${finalSubdomain}):`, err.message);
+      } finally {
+        if (isolate) {
+          isolate.dispose();
+        }
       }
     }
-
 
     const payload: ForwardRequest = {
       id: crypto.randomUUID(),
@@ -260,19 +229,27 @@ export const trafficController = asyncHandler(
       timestamp: Date.now(),
     };
 
-    const isInterceptionActive = await redis.get(`interception:${finalSubdomain}`) === 'true';
+    if (isInterceptionStr === 'true') {
+      const timeoutId = setTimeout(() => {
+        if (pendingInterceptions.has(payload.id)) {
+          pendingInterceptions.delete(payload.id);
+          if (!res.headersSent) {
+            res.status(504).json({ error: "Interception timeout exceeded." });
+          }
+        }
+      }, 60000);
 
-    if (isInterceptionActive) {
       pendingInterceptions.set(payload.id, {
         res,
         cliSocketId: socketId,
-        originalPayload: payload
+        originalPayload: payload,
+        timeoutId
       });
 
       io.to(`dashboard-${finalSubdomain}`).emit("intercepted-request", payload);
-
       return;
     }
+
     io.to(`dashboard-${finalSubdomain}`).emit("new-request", payload);
 
     io.to(socketId)
@@ -282,33 +259,24 @@ export const trafficController = asyncHandler(
         payload,
         async (err: any, responses: LocalResponse) => {
           if (err) {
-            return res
-              .status(504)
-              .json({ error: "Local CLI failed to respond in time." });
+            return res.status(504).json({ error: "Local CLI failed to respond in time." });
           }
 
-          const response = Array.isArray(responses)
-            ? responses[0]
-            : responses;
+          const response = Array.isArray(responses) ? responses[0] : responses;
 
           if (!response || !response.status) {
-            return res
-              .status(502)
-              .json({ error: "Invalid response from CLI" });
+            return res.status(502).json({ error: "Invalid response from CLI" });
           }
 
           if (req.method === "GET" && response.status === 200) {
             const cacheControl = response.headers['cache-control'] || response.headers['Cache-Control'];
 
             if (cacheControl) {
-
               const maxAgeMatch = cacheControl.match(/max-age=(\d+)/);
 
               if (maxAgeMatch && !cacheControl.includes('no-store') && !cacheControl.includes('no-cache')) {
                 const ttl = parseInt(maxAgeMatch[1], 10);
-
                 if (ttl > 0) {
-
                   await redis.set(cacheKey, JSON.stringify(response), 'EX', ttl);
                 }
               }
@@ -320,31 +288,30 @@ export const trafficController = asyncHandler(
             finalData = Buffer.from(response.data, 'base64');
           }
 
-          const duration = (performance.now() - startTime).toFixed(2);
-          console.log(`[CACHE MISS] ${finalSubdomain}${searchPath} - ${duration}ms`);
-
           res.status(response.status).set(response.headers).send(finalData);
         }
       );
 
-    try {
-      const socket = io.sockets.sockets.get(socketId);
-      const tunnel = await Tunnel.findOne({ subdomain: finalSubdomain });
-      const ownerId = tunnel?.owner ?? socket?.data?.userId;
+    (async () => {
+      try {
+        const socket = io.sockets.sockets.get(socketId as string);
+        const tunnel = await Tunnel.findOne({ subdomain: finalSubdomain });
+        const ownerId = tunnel?.owner ?? socket?.data?.userId;
 
-      if (ownerId) {
-        await RequestLog.create({
-          owner: ownerId,
-          subdomain: finalSubdomain,
-          method: req.method,
-          path: finalPath || "/",
-          headers: req.headers,
-          body: req.body,
-          timestamp: Date.now(),
-        });
+        if (ownerId) {
+          await RequestLog.create({
+            owner: ownerId,
+            subdomain: finalSubdomain,
+            method: req.method,
+            path: finalPath || "/",
+            headers: req.headers,
+            body: req.body,
+            timestamp: Date.now(),
+          });
+        }
+      } catch (logError) {
+        console.error("⚠️ Failed to log request:", logError);
       }
-    } catch (logError) {
-      console.error("⚠️ Failed to log request:", logError);
-    }
+    })();
   }
 );

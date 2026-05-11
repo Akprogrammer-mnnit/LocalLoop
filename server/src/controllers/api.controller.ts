@@ -10,34 +10,25 @@ import { Session } from "../models/session.model";
 export const getHistory = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { subdomain } = req.params;
-
     if (!subdomain) {
       throw new ApiError(400, "Subdomain is required");
     }
-
-    if (req.user?._id) {
-      const tunnel = await Tunnel.findOne({ subdomain, owner: req.user._id });
-      if (!tunnel) {
-        throw new ApiError(403, "You do not have access to this subdomain");
-      }
-
-      const userLogs = await RequestLog.find({ owner: req.user._id, subdomain }).sort({ timestamp: -1 });
-      return res.status(200).json({
-        success: true,
-        source: "database",
-        data: userLogs,
-      });
+    if (!req.user?._id) {
+      throw new ApiError(401, "Unauthorized");
     }
 
-    const redisKey = `history:${subdomain}`;
-    const rawLogs = await redis.lrange(redisKey, 0, -1);
-    const guestLogs = rawLogs.map(log => JSON.parse(log));
+    const tunnel = await Tunnel.findOne({ subdomain, owner: req.user._id });
+    if (!tunnel) {
+      throw new ApiError(403, "You do not have access to this subdomain");
+    }
 
+    const userLogs = await RequestLog.find({ owner: req.user._id, subdomain }).sort({ timestamp: -1 });
     return res.status(200).json({
       success: true,
-      source: "redis",
-      data: guestLogs,
+      source: "database",
+      data: userLogs,
     });
+
   }
 );
 
@@ -108,3 +99,15 @@ export const deleteSession = asyncHandler(async (req: AuthRequest, res: Response
 
   res.status(200).json({ success: true });
 });
+
+export const getCurrentChaos = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { subdomain } = req.params;
+  const data = await redis.get(`chaos:${subdomain}`);
+  res.json(data ? JSON.parse(data) : { type: 'none', value: 0 });
+})
+
+export const getCurrentRules = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { subdomain } = req.params;
+  const script = await redis.get(`rules:${subdomain}`);
+  return res.json({ script: script || undefined });
+})

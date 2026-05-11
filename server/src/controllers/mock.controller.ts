@@ -5,7 +5,6 @@ import { ApiError } from "../utils/ApiError";
 import { Tunnel } from "../models/tunnel.model";
 export const getMocks = asyncHandler(async (req: Request, res: Response) => {
     const { subdomain } = req.params;
-
     if (!subdomain) throw new ApiError(400, "Subdomain required");
 
     const mocks = await Mock.find({ subdomain }).sort({ createdAt: -1 });

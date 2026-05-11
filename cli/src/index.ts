@@ -34,7 +34,7 @@ interface LocalResponse {
 const program = new Command()
 
 program
-    .version('1.0.1')
+    .version('2.0.0')
     .requiredOption('-p, --port <number>', 'Local port to forward', '3000')
     .requiredOption('-s, --subdomain <string>', 'Desired subdomain')
     .option('-h, --host <string>', 'Proxy Server URL', process.env.PROXY_HOST || PRODUCTION_SERVER)
@@ -78,7 +78,7 @@ socket.on('registered', (data: { url: string }) => {
     } catch (e) { }
 
     const infoBox = `
- ${chalk.bold.cyan('LocalLoop v1.0')} 🚀
+ ${chalk.bold.cyan('LocalLoop v1.0')} 
  
  ${chalk.green('✔')} ${chalk.bold('Tunnel Active')}
  ${chalk.gray('---------------------------------------------------')}
@@ -103,7 +103,7 @@ socket.on('registered', (data: { url: string }) => {
 
     if (heartbeatInterval) clearInterval(heartbeatInterval);
     heartbeatInterval = setInterval(() => {
-        socket.emit('heartbeat', { subdomain: fullId });
+        socket.emit('heartbeat');
     }, 30000);
 
     console.log(chalk.gray(`\nWaiting for incoming requests...`));

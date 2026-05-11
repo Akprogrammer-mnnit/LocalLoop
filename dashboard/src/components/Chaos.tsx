@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Clock, AlertOctagon, Power } from "lucide-react";
+import axios from "axios";
 
 interface ChaosProps {
     subdomain: string;
@@ -12,6 +13,23 @@ export default function Chaos({ secureId, socket }: ChaosProps) {
     const [delay, setDelay] = useState(1000);
     const [failureRate, setFailureRate] = useState(20);
 
+    useEffect(() => {
+        const fetchCurrentChaos = async () => {
+            try {
+                const res = await axios.get(`${import.meta.env.VITE_SERVER_URL}/api/chaos/${secureId}`);
+
+                if (res.data) {
+                    setActiveMode(res.data.type || 'none');
+                    if (res.data.type === 'slow') setDelay(res.data.value);
+                    if (res.data.type === 'flaky') setFailureRate(res.data.value);
+                }
+            } catch (e) {
+                console.error("Failed to sync chaos state", e);
+            }
+        };
+
+        fetchCurrentChaos();
+    }, [secureId]);
     const applyChaos = (mode: 'none' | 'slow' | 'flaky', val?: number) => {
         setActiveMode(mode);
         const value = val ?? (mode === 'slow' ? delay : failureRate);
@@ -36,7 +54,7 @@ export default function Chaos({ secureId, socket }: ChaosProps) {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-                {/* 1. Normal Mode */}
+
                 <div
                     onClick={() => applyChaos('none')}
                     className={`cursor-pointer p-6 rounded-xl border-2 transition-all ${activeMode === 'none'
@@ -54,7 +72,7 @@ export default function Chaos({ secureId, socket }: ChaosProps) {
                     </p>
                 </div>
 
-                {/* 2. Slow Mode */}
+
                 <div
                     onClick={() => applyChaos('slow')}
                     className={`cursor-pointer p-6 rounded-xl border-2 transition-all ${activeMode === 'slow'
@@ -86,7 +104,7 @@ export default function Chaos({ secureId, socket }: ChaosProps) {
                     </div>
                 </div>
 
-                {/* 3. Flaky Mode */}
+
                 <div
                     onClick={() => applyChaos('flaky')}
                     className={`cursor-pointer p-6 rounded-xl border-2 transition-all ${activeMode === 'flaky'

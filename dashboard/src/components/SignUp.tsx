@@ -23,7 +23,6 @@ function SignUp() {
       setUser(response.data.data);
       navigate("/");
     } catch (err: any) {
-      console.log(err);
       setError(
         err.response?.data?.message || "Registration failed"
       );
@@ -42,7 +41,6 @@ function SignUp() {
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>
 
-            {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email address
@@ -61,7 +59,6 @@ function SignUp() {
               </div>
             </div>
 
-            {/* Password Field */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Password
@@ -80,7 +77,6 @@ function SignUp() {
               </div>
             </div>
 
-            {/* Error Message */}
             {error && (
               <div className="rounded-md bg-red-50 p-4">
                 <div className="flex">
@@ -93,7 +89,6 @@ function SignUp() {
               </div>
             )}
 
-            {/* Submit Button */}
             <div>
               <button
                 type="submit"

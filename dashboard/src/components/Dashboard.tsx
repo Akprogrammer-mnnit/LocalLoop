@@ -19,7 +19,7 @@ interface RequestLog {
 }
 
 interface InterceptedRequest {
-  id: string;
+  id?: string;
   type: 'request';
   method: string;
   path: string;

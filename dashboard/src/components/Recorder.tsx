@@ -14,7 +14,7 @@ interface SavedSession {
 interface RecorderProps {
     subdomain: string;
     secureId: string;
-    requests: any[]; // The live stream of requests from Dashboard
+    requests: any[];
 }
 
 export default function Recorder({ subdomain, secureId, requests }: RecorderProps) {
@@ -23,22 +23,22 @@ export default function Recorder({ subdomain, secureId, requests }: RecorderProp
     const [recordedRequests, setRecordedRequests] = useState<any[]>([]);
     const [sessionName, setSessionName] = useState("");
     const [isSaving, setIsSaving] = useState(false);
+    const [recordingStartTime, setRecordingStartTime] = useState<number>(0);
 
     useEffect(() => {
         fetchSessions();
     }, [subdomain]);
-
-    // Watch for new requests when recording
     useEffect(() => {
         if (isRecording && requests.length > 0) {
-            // Add the newest request to our list if it's new
             const newest = requests[0];
-            // Simple check to avoid duplicates (assuming requests[0] is always newest)
-            if (recordedRequests.length === 0 || newest.id !== recordedRequests[recordedRequests.length - 1].id) {
-                setRecordedRequests(prev => [...prev, newest]);
+
+            if (newest.timestamp >= recordingStartTime) {
+                if (recordedRequests.length === 0 || newest.id !== recordedRequests[recordedRequests.length - 1].id) {
+                    setRecordedRequests(prev => [...prev, newest]);
+                }
             }
         }
-    }, [requests, isRecording]);
+    }, [requests, isRecording, recordingStartTime]);
 
     const fetchSessions = async () => {
         try {
@@ -49,6 +49,7 @@ export default function Recorder({ subdomain, secureId, requests }: RecorderProp
 
     const startRecording = () => {
         setRecordedRequests([]);
+        setRecordingStartTime(Date.now());
         setIsRecording(true);
     };
 
@@ -57,7 +58,9 @@ export default function Recorder({ subdomain, secureId, requests }: RecorderProp
         setIsSaving(true);
     };
 
+
     const saveSession = async () => {
+
         if (!sessionName) return alert("Enter a name");
         try {
             await axios.post(`${SERVER_URL}/api/sessions`, {
@@ -77,12 +80,12 @@ export default function Recorder({ subdomain, secureId, requests }: RecorderProp
         setSessions(prev => prev.filter(s => s._id !== id));
     };
 
+
     const playSession = async (session: SavedSession) => {
         alert(`▶️ Playing Session: ${session.name} (${session.requests.length} requests)`);
 
         for (const req of session.requests) {
             try {
-                // Replay logic (same as Dashboard)
                 const cleanHeaders = { ...req.headers };
                 delete cleanHeaders['host'];
                 delete cleanHeaders['content-length'];
@@ -95,7 +98,6 @@ export default function Recorder({ subdomain, secureId, requests }: RecorderProp
                     headers: cleanHeaders,
                     data: req.body
                 });
-                // Small delay to prevent flooding
                 await new Promise(r => setTimeout(r, 200));
             } catch (e) { console.error(e); }
         }
