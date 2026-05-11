@@ -23,8 +23,9 @@ function SignUp() {
       setUser(response.data.data);
       navigate("/");
     } catch (err: any) {
+      console.log(err);
       setError(
-        err.response?.data?.error || "Registration failed"
+        err.response?.data?.message || "Registration failed"
       );
     }
   };
@@ -40,7 +41,7 @@ function SignUp() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>
-            
+
             {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">

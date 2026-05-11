@@ -1,15 +1,12 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useAuthStore } from "./store/store";
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 
 function App() {
   const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
   const [loading, setLoading] = useState(true);
-
-  const navigate = useNavigate();
-  const location = useLocation();
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -22,18 +19,13 @@ function App() {
       } catch (error) {
         console.log("Not logged in.");
         logout();
-        const isPublicPage = ["/login", "/register"].includes(location.pathname);
-        if (!isPublicPage) {
-          navigate("/login");
-        }
-
       } finally {
         setLoading(false);
       }
     };
 
     fetchCurrentUser();
-  }, [setUser, logout, navigate, location.pathname]);
+  }, [setUser, logout]);
 
   if (loading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
 
