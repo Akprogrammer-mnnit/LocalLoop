@@ -1,4 +1,4 @@
-# 🚀 LocalLoop
+# LocalLoop
 
 > **expose localhost to the world.**  
 > A developer-centric reverse proxy tunnel with built-in Chaos Engineering, Request Interception, and Traffic Replay.
@@ -10,19 +10,19 @@
 
 ---
 
-## ✨ Features
+## Features
 
-* 🌍 **Instant Public URLs**: Expose `localhost:3000` to the internet in seconds.
-* 🕵️ **Man-in-the-Middle Interception**: Pause requests, edit Headers/Body, and resume them manually.
-* 💥 **Chaos Engineering**: Simulate **High Latency** (Slow 3G) or **Random Failures** (500 Errors) to test app resilience.
-* 📜 **Request Replay**: One-click replay of failed webhooks or API calls.
-* 🔒 **Secure by Design**: Built-in Token Authentication and Subdomain Ownership.
-* ⚡ **Zero Config DNS**: Uses path-based routing (`/hook/subdomain`)—no wildcard DNS required.
+* **Instant Public URLs**: Expose `localhost:3000` to the internet in seconds.
+* **Man-in-the-Middle Interception**: Pause requests, edit Headers/Body, and resume them manually.
+* **Chaos Engineering**: Simulate **High Latency** (Slow 3G) or **Random Failures** (500 Errors) to test app resilience.
+* **Request Replay**: One-click replay of failed webhooks or API calls.
+* **Secure by Design**: Built-in Token Authentication and Subdomain Ownership.
+* **Zero Config DNS**: Uses path-based routing (`/hook/subdomain`)—no wildcard DNS required.
 
 ---
 
-## 🏗️ Architecture
-
+## Architecture
+![LocalLoop Architecture Diagram](Diagram.png)
 LocalLoop consists of three components:
 
 1. **CLI Agent** (`/cli`): Runs on your machine, forwards traffic to localhost.
@@ -31,7 +31,7 @@ LocalLoop consists of three components:
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Installation
 
@@ -51,11 +51,11 @@ Run your local server (e.g., on port 3000), then run:
 npx super-loop -p 3000 -s my-app -k <YOUR_API_KEY>
 ```
 
-| Flag | Description | Default |
-|------|------------|---------|
-| `-p, --port` | The local port to forward | 3000 |
-| `-s, --subdomain` | Your unique project name | Required |
-| `-k, --key` | Your Authentication Key | Required |
+| Flag              | Description               | Default  |
+| ----------------- | ------------------------- | -------- |
+| `-p, --port`      | The local port to forward | 3000     |
+| `-s, --subdomain` | Your unique project name  | Required |
+| `-k, --key`       | Your Authentication Key   | Required |
 
 ---
 
@@ -66,14 +66,14 @@ Open it to see requests flowing in real-time!
 
 ---
 
-# ⚠️ Integration Guide (Read Carefully)
+# Integration Guide (Read Carefully)
 
 Since LocalLoop uses **Path-Based Routing**  
 (e.g., `https://localloop.com/hook/my-app/`), modern frontend frameworks need a small tweak to work correctly.
 
 ---
 
-## ⚛️ For React / Vite / Vue Users
+## For React / Vite / Vue Users
 
 If you see a **Blank Screen** or **404 Errors for assets (CSS/JS)**, follow these steps:
 
@@ -115,13 +115,13 @@ npm run preview
 
 ---
 
-### 3️⃣ API Requests
+### 3️. API Requests
 
 ❗ **Do NOT use absolute paths (starting with `/`) in your API calls.**
 
 Because LocalLoop uses **path-based routing**, absolute paths will bypass your tunnel and hit the main LocalLoop server instead.
 
-#### 🔎 Why?
+#### Why?
 
 - **Absolute Path (`/api/users`)**  
   → `https://localloop.com/api/users`  
@@ -135,7 +135,7 @@ Because LocalLoop uses **path-based routing**, absolute paths will bypass your t
 
 ---
 
-### ✅ Correct Usage
+### Correct Usage
 
 ```js
 // ❌ BAD: Hits the main server (bypasses your tunnel)
@@ -147,13 +147,13 @@ fetch("api/users");
 axios.get("api/users");
 ```
 
-💡 **Rule of Thumb:**  
+**Rule of Thumb:**  
 Always use **relative paths** for frontend API calls when using LocalLoop.
 
 
 ---
 
-# 🛠️ Development
+# Development
 
 ## Prerequisites
 
