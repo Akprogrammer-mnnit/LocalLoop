@@ -39,6 +39,10 @@ app.use(compression({
     threshold: 1024
 }));
 
+app.use('/health', (req, res) => {
+    res.status(200).json({ status: "ok" });
+});
+
 const limiter = rateLimit({
     store: new RedisStore({
         sendCommand: (...args: string[]): Promise<RedisReply> =>
@@ -204,8 +208,10 @@ io.on('connection', (socket) => {
         const subdomain = socket.data.subdomain;
 
         if (subdomain) {
-            await redis.expire(`tunnel:${subdomain}`, 60);
-            await redis.expire(`auth:${subdomain}`, 60);
+            const pipeline = redis.pipeline();
+            pipeline.expire(`tunnel:${subdomain}`, 60);
+            pipeline.expire(`auth:${subdomain}`, 60);
+            await pipeline.exec();
         }
     });
 
